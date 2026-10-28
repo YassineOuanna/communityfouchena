@@ -4,12 +4,14 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import ChatWindow from "../components/ChatWindow";
+import UserContextMenu from "../components/UserContextMenu";
 
 export default function ChatPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
   const [activeRoom, setActiveRoom] = useState({ name: "global", description: "General community chat" });
   const [activeDM, setActiveDM] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
   
   // Mobile check
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
@@ -42,6 +44,22 @@ export default function ChatPage() {
 
   const handleBackToList = () => {
     setMobileView("list");
+  };
+
+  const handleUserContextMenu = (e, targetUser, roomName) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      user: targetUser,
+      room: roomName || activeRoom?.name || "global",
+    });
+  };
+
+  const handleRoomBlocked = (blockedRoom) => {
+    setActiveRoom({ name: "global", description: "General community chat" });
+    setActiveDM(null);
   };
 
   return (
@@ -93,6 +111,7 @@ export default function ChatPage() {
               onSelectRoom={handleSelectRoom}
               onSelectDM={handleSelectDM}
               onLogout={handleLogout}
+              onUserContextMenu={handleUserContextMenu}
             />
           </div>
 
@@ -107,10 +126,23 @@ export default function ChatPage() {
               activeDM={activeDM}
               onBack={isMobile ? handleBackToList : null}
               onToggleSidebar={isMobile ? handleBackToList : null}
+              onUserContextMenu={handleUserContextMenu}
+              onRoomBlocked={handleRoomBlocked}
             />
           </div>
         </div>
       </div>
+
+      {/* User Context Menu for Moderation, Mute, Ban, Kick, and Password Reset */}
+      <AnimatePresence>
+        {contextMenu && (
+          <UserContextMenu
+            target={contextMenu}
+            onClose={() => setContextMenu(null)}
+            onStartDM={handleSelectDM}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

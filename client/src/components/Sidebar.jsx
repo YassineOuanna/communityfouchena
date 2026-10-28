@@ -5,15 +5,17 @@ import { useAuth } from "../context/AuthContext";
 import UserItem from "./UserItem";
 import RoomModal from "./RoomModal";
 import AdminModal from "./AdminModal";
+import ChangePasswordModal from "./ChangePasswordModal";
 import AdBanner, { AD_CONFIG } from "./AdBanner";
 import api from "../utils/api";
 
-export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM, onLogout }) {
+export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM, onLogout, onUserContextMenu }) {
   const { onlineUsers, isConnected } = useSocket();
   const { user } = useAuth();
   const [rooms, setRooms] = useState([{ name: "global", description: "General community chat" }]);
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [tab, setTab] = useState("rooms");
 
   useEffect(() => {
@@ -182,6 +184,10 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                   currentUserId={user?.id}
                   isSelected={activeDM?.userId === u.userId}
                   onClick={onSelectDM}
+                  onContextMenu={(e, targetUser) =>
+                    onUserContextMenu &&
+                    onUserContextMenu(e, targetUser, activeRoom?.name)
+                  }
                 />
               ))}
             </motion.div>
@@ -227,6 +233,18 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Change Password Button */}
+            <button
+              type="button"
+              onClick={() => setShowPasswordModal(true)}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-300 hover:bg-white/10 transition-colors"
+              title="Change Password"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+              </svg>
+            </button>
+
             {user?.isAdmin && (
               <button
                 type="button"
@@ -260,6 +278,9 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
         )}
         {showAdminModal && (
           <AdminModal onClose={() => setShowAdminModal(false)} />
+        )}
+        {showPasswordModal && (
+          <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
         )}
       </AnimatePresence>
     </div>

@@ -19,7 +19,7 @@ function getAvatarGradient(name = "") {
   return gradients[index];
 }
 
-export default function MessageBubble({ msg, isOwn, seenBy = [] }) {
+export default function MessageBubble({ msg, isOwn, seenBy = [], onUserContextMenu }) {
   const time = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
@@ -34,7 +34,18 @@ export default function MessageBubble({ msg, isOwn, seenBy = [] }) {
     >
       {/* Sender Name for incoming messages */}
       {!isOwn && (
-        <span className="text-[11px] font-semibold text-slate-300 mb-1 ml-10">
+        <span
+          onContextMenu={(e) =>
+            onUserContextMenu &&
+            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
+          }
+          onClick={(e) =>
+            onUserContextMenu &&
+            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
+          }
+          className="text-[11px] font-semibold text-slate-300 mb-1 ml-10 cursor-pointer hover:text-indigo-300 transition-colors"
+          title="Click or right-click for options"
+        >
           {msg.senderName}
         </span>
       )}
@@ -47,12 +58,21 @@ export default function MessageBubble({ msg, isOwn, seenBy = [] }) {
       >
         {/* Sender Profile Avatar */}
         <div
-          className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold select-none shadow-sm ${
+          onContextMenu={(e) =>
+            onUserContextMenu &&
+            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
+          }
+          onClick={(e) =>
+            !isOwn &&
+            onUserContextMenu &&
+            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
+          }
+          className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold select-none shadow-sm cursor-pointer hover:scale-105 transition-transform ${
             isOwn
               ? "bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white border border-white/20"
               : "bg-white/[0.08] border border-white/10 text-slate-200"
           }`}
-          title={msg.senderName}
+          title={`${msg.senderName} (Options)`}
         >
           {msg.senderName?.[0]?.toUpperCase() || "?"}
         </div>

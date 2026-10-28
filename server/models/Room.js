@@ -1,4 +1,4 @@
-﻿const mongoose = require("mongoose");
+const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const roomSchema = new mongoose.Schema({
@@ -7,6 +7,28 @@ const roomSchema = new mongoose.Schema({
   isPrivate: { type: Boolean, default: false },
   password: { type: String, default: null },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  bannedUsers: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      username: String,
+      bannedAt: { type: Date, default: Date.now },
+    },
+  ],
+  kickedUsers: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      username: String,
+      kickedAt: { type: Date, default: Date.now },
+    },
+  ],
+  mutedUsers: [
+    {
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      username: String,
+      until: { type: Date, default: null }, // null means permanent
+      mutedAt: { type: Date, default: Date.now },
+    },
+  ],
   createdAt: { type: Date, default: Date.now },
 });
 

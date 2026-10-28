@@ -7,11 +7,20 @@ import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
 import api from "../utils/api";
 
-export default function ChatWindow({ activeRoom, activeDM, onBack, onToggleSidebar, sidebarOpen }) {
+export default function ChatWindow({
+  activeRoom,
+  activeDM,
+  onBack,
+  onToggleSidebar,
+  sidebarOpen,
+  onUserContextMenu,
+  onRoomBlocked,
+}) {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [typers, setTypers] = useState([]);
+  const [notice, setNotice] = useState("");
   const bottomRef = useRef(null);
 
   const currentRoom = activeDM
@@ -129,16 +138,41 @@ export default function ChatWindow({ activeRoom, activeDM, onBack, onToggleSideb
       );
     };
 
+    const onKicked = ({ room, message }) => {
+      if (room === currentRoom) {
+        alert(message || "You have been kicked from this room.");
+        onRoomBlocked && onRoomBlocked(room);
+      }
+    };
+
+    const onNotice = ({ message }) => {
+      setNotice(message);
+      setTimeout(() => setNotice(""), 6000);
+    };
+
+    const onError = ({ message }) => {
+      setNotice(message);
+      setTimeout(() => setNotice(""), 5000);
+    };
+
     socket.on("new_message", onNewMsg);
     socket.on("new_dm", onNewDM);
     socket.on("messages_seen", onMessagesSeen);
     socket.on("user_typing", onTyping);
+    socket.on("kicked_from_room", onKicked);
+    socket.on("moderation_notice", onNotice);
+    socket.on("moderation_alert", onNotice);
+    socket.on("error", onError);
 
     return () => {
       socket.off("new_message", onNewMsg);
       socket.off("new_dm", onNewDM);
       socket.off("messages_seen", onMessagesSeen);
       socket.off("user_typing", onTyping);
+      socket.off("kicked_from_room", onKicked);
+      socket.off("moderation_notice", onNotice);
+      socket.off("moderation_alert", onNotice);
+      socket.off("error", onError);
     };
   }, [socket, currentRoom, user.username, isTabActiveAndVisible]);
 
@@ -203,6 +237,27 @@ export default function ChatWindow({ activeRoom, activeDM, onBack, onToggleSideb
         </div>
       </div>
 
+      {/* Moderation / Error Notice Banner */}
+      <AnimatePresence>
+        {notice && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-200 flex justify-between items-center z-10 font-medium"
+          >
+            <span>⚠️ {notice}</span>
+            <button
+              type="button"
+              onClick={() => setNotice("")}
+              className="text-amber-400 hover:text-white font-bold ml-2"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Message Stream */}
       <motion.div
         key={`messages-${currentRoom}`}
@@ -244,6 +299,7 @@ export default function ChatWindow({ activeRoom, activeDM, onBack, onToggleSideb
               msg={msg}
               isOwn={msg.senderName === user.username}
               seenBy={activeSeenBy}
+              onUserContextMenu={onUserContextMenu}
             />
           );
         })}

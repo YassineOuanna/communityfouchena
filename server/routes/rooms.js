@@ -1,14 +1,18 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const Room = require("../models/Room");
 const Message = require("../models/Message");
 const authMiddleware = require("../middleware/auth");
 const bcrypt = require("bcryptjs");
 
-// GET /api/rooms
+// GET /api/rooms - Filter out rooms user is kicked or banned from
 router.get("/", authMiddleware, async (req, res) => {
   try {
-    const rooms = await Room.find({ isPrivate: false }).select("-password");
+    const rooms = await Room.find({
+      isPrivate: false,
+      "bannedUsers.userId": { $ne: req.user.id },
+      "kickedUsers.userId": { $ne: req.user.id },
+    }).select("-password");
     res.json(rooms);
   } catch (err) {
     res.status(500).json({ message: "Server error" });

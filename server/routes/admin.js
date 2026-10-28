@@ -68,6 +68,24 @@ router.delete("/users/:id", async (req, res) => {
   }
 });
 
+// POST /api/admin/users/:id/reset-password - Admin resets any user's password
+router.post("/users/:id/reset-password", async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 4) {
+      return res.status(400).json({ message: "Password must be at least 4 characters long." });
+    }
+    const userToReset = await User.findById(req.params.id);
+    if (!userToReset) return res.status(404).json({ message: "User not found" });
+
+    userToReset.password = newPassword;
+    await userToReset.save();
+    res.json({ message: `Password for @${userToReset.username} has been reset successfully.` });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 // GET /api/admin/messages - Recent messages across all rooms
 router.get("/messages", async (req, res) => {
   try {
