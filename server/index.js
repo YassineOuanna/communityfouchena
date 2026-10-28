@@ -76,7 +76,7 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Secure Server running on port ${PORT}`);
 });
 
-// MongoDB Atlas connection with reliable fallback
+// MongoDB Atlas connection with reliable fallback and auto-retry
 const MONGO_URI =
   process.env.MONGO_URI ||
   "mongodb+srv://chopardsamurai_db_user:ASwyQqrRwqx7t0FT@cluster0.qtcstpn.mongodb.net/communityfouchena?retryWrites=true&w=majority";
@@ -85,16 +85,18 @@ const JWT_SECRET =
   process.env.JWT_SECRET || "communityfouchena_super_secret_key_2024";
 process.env.JWT_SECRET = JWT_SECRET;
 
-console.log("⏳ Connecting to MongoDB Atlas...");
-mongoose
-  .connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 20000,
-    socketTimeoutMS: 45000,
-  })
-  .then(() => {
+const connectDB = async () => {
+  try {
+    console.log("⏳ Connecting to MongoDB Atlas...");
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 8000,
+      socketTimeoutMS: 45000,
+    });
     console.log("✅ MongoDB Atlas connected successfully!");
-  })
-  .catch((err) => {
+  } catch (err) {
     console.error("❌ MongoDB Atlas connection error:", err.message);
-    console.log("⚠️ If using IP Whitelist, ensure 0.0.0.0/0 (Anywhere) is allowed in MongoDB Atlas.");
-  });
+    console.log("⏳ Retrying connection to MongoDB in 3 seconds...");
+    setTimeout(connectDB, 3000);
+  }
+};
+connectDB();
