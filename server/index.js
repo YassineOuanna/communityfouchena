@@ -59,8 +59,22 @@ app.get("*", (req, res, next) => {
   });
 });
 
+// Global process error handlers for clear Render logs
+process.on("uncaughtException", (err) => {
+  console.error("❌ Uncaught Exception:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("❌ Unhandled Rejection:", reason);
+});
+
 // Socket.IO Handlers with Input Validation
 require("./socket/handlers")(io);
+
+// Start server immediately so Render detects the open port and marks the service LIVE
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Secure Server running on port ${PORT}`);
+});
 
 // MongoDB Atlas connection with reliable fallback
 const MONGO_URI =
@@ -71,19 +85,16 @@ const JWT_SECRET =
   process.env.JWT_SECRET || "communityfouchena_super_secret_key_2024";
 process.env.JWT_SECRET = JWT_SECRET;
 
+console.log("⏳ Connecting to MongoDB Atlas...");
 mongoose
   .connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 15000,
+    serverSelectionTimeoutMS: 20000,
     socketTimeoutMS: 45000,
   })
   .then(() => {
-    console.log("✅ MongoDB Atlas connected!");
-    const PORT = process.env.PORT || 3001;
-    server.listen(PORT, "0.0.0.0", () =>
-      console.log(`🚀 Secure Server running on port ${PORT}`)
-    );
+    console.log("✅ MongoDB Atlas connected successfully!");
   })
   .catch((err) => {
     console.error("❌ MongoDB Atlas connection error:", err.message);
-    process.exit(1);
+    console.log("⚠️ If using IP Whitelist, ensure 0.0.0.0/0 (Anywhere) is allowed in MongoDB Atlas.");
   });
