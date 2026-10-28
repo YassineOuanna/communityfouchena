@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, ".env") });
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -62,25 +62,25 @@ app.get("*", (req, res, next) => {
 // Socket.IO Handlers with Input Validation
 require("./socket/handlers")(io);
 
-// MongoDB Atlas connection
+// MongoDB Atlas connection with reliable fallback
 const MONGO_URI =
   process.env.MONGO_URI ||
-  "mongodb+srv://daly232007_db_user:Kkbbffmm99**--@cluster0.qtcstpn.mongodb.net/communityfouchena?retryWrites=true&w=majority";
+  "mongodb+srv://chopardsamurai_db_user:ASwyQqrRwqx7t0FT@cluster0.qtcstpn.mongodb.net/communityfouchena?retryWrites=true&w=majority";
 
 const JWT_SECRET =
-  process.env.JWT_SECRET || "communityfouchena_super_secret_jwt_key_2026_xyz";
+  process.env.JWT_SECRET || "communityfouchena_super_secret_key_2024";
 process.env.JWT_SECRET = JWT_SECRET;
 
 mongoose
   .connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 10000,
+    serverSelectionTimeoutMS: 15000,
     socketTimeoutMS: 45000,
   })
   .then(() => {
     console.log("✅ MongoDB Atlas connected!");
     const PORT = process.env.PORT || 3001;
     server.listen(PORT, "0.0.0.0", () =>
-      console.log(`🚀 Secure Server running at http://localhost:${PORT}`)
+      console.log(`🚀 Secure Server running on port ${PORT}`)
     );
   })
   .catch((err) => {
