@@ -77,9 +77,10 @@ server.listen(PORT, "0.0.0.0", () => {
 });
 
 // MongoDB Atlas connection with reliable fallback and auto-retry
-const MONGO_URI =
-  process.env.MONGO_URI ||
-  "mongodb+srv://chopardsamurai_db_user:ASwyQqrRwqx7t0FT@cluster0.qtcstpn.mongodb.net/communityfouchena?retryWrites=true&w=majority";
+let MONGO_URI = process.env.MONGO_URI;
+if (!MONGO_URI || MONGO_URI.includes("daly232007")) {
+  MONGO_URI = "mongodb+srv://chopardsamurai_db_user:ASwyQqrRwqx7t0FT@cluster0.qtcstpn.mongodb.net/communityfouchena?retryWrites=true&w=majority";
+}
 
 const JWT_SECRET =
   process.env.JWT_SECRET || "communityfouchena_super_secret_key_2024";
