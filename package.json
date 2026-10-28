@@ -1,0 +1,15 @@
+{
+  "name": "communityfouchena",
+  "version": "1.0.0",
+  "description": "Anonymous real-time chat web app inspired by Facebook Messenger",
+  "scripts": {
+    "install:server": "cd server && npm install",
+    "install:client": "cd client && npm install",
+    "build:client": "cd client && npm run build",
+    "build": "npm run install:server && npm run install:client && npm run build:client",
+    "start": "node server/index.js"
+  },
+  "keywords": ["chat", "realtime", "messenger"],
+  "author": "",
+  "license": "ISC"
+}
