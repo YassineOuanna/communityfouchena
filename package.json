@@ -4,7 +4,7 @@
   "description": "Anonymous real-time chat web app inspired by Facebook Messenger",
   "main": "server/index.js",
   "scripts": {
-    "build": "cd client && npm install --include=dev && npm run build",
+    "build": "npm install && cd client && npm install --include=dev && npm run build",
     "start": "node server/index.js"
   },
   "dependencies": {
