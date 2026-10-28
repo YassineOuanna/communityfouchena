@@ -4,8 +4,15 @@ import api from "../utils/api";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem("cf_token"));
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("cf_user");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -16,8 +23,10 @@ export function AuthProvider({ children }) {
       } catch {
         logout();
       }
+    } else if (!token) {
+      setUser(null);
     }
-  }, []);
+  }, [token]);
 
   const login = async (username, password) => {
     setLoading(true);

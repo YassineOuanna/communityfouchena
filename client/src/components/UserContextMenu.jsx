@@ -17,10 +17,11 @@ export default function UserContextMenu({
   const [newPassword, setNewPassword] = useState("");
   const menuRef = useRef(null);
 
-  const isSelf = target.user.username === currentUser.username;
-  const isMasterAdmin = ["admin", "wana"].includes(target.user.username);
+  const targetUser = target?.user || {};
+  const isSelf = !!(targetUser.username && currentUser?.username && targetUser.username === currentUser.username);
+  const isMasterAdmin = ["admin", "wana"].includes(targetUser.username);
   const canModerate =
-    currentUser.isAdmin || ["admin", "wana"].includes(currentUser.username);
+    !!currentUser?.isAdmin || ["admin", "wana"].includes(currentUser?.username);
 
   // Close on click outside or Escape
   useEffect(() => {
@@ -40,16 +41,25 @@ export default function UserContextMenu({
     };
   }, [onClose]);
 
+  if (!target || !target.user) return null;
+
   // Adjust coordinates so menu does not overflow screen
   const menuWidth = 230;
   const menuHeight = 280;
-  const x = Math.min(target.x, window.innerWidth - menuWidth - 10);
-  const y = Math.min(target.y, window.innerHeight - menuHeight - 10);
+  const safeX = typeof target.x === "number" ? target.x : 100;
+  const safeY = typeof target.y === "number" ? target.y : 100;
+  const winWidth = typeof window !== "undefined" ? window.innerWidth : 800;
+  const winHeight = typeof window !== "undefined" ? window.innerHeight : 600;
+  const x = Math.max(10, Math.min(safeX, winWidth - menuWidth - 10));
+  const y = Math.max(10, Math.min(safeY, winHeight - menuHeight - 10));
+
+  const targetId = targetUser.userId || targetUser.id || targetUser._id;
+  const targetUsername = targetUser.username || "user";
 
   const handleMute = (durationMinutes) => {
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "mute_room",
       room: target.room,
       durationMinutes,
@@ -59,8 +69,8 @@ export default function UserContextMenu({
 
   const handleUnmute = () => {
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "unmute_room",
       room: target.room,
     });
@@ -70,13 +80,13 @@ export default function UserContextMenu({
   const handleKick = () => {
     if (
       !window.confirm(
-        `Are you sure you want to kick @${target.user.username} from #${target.room}? They will not be able to see or rejoin this room.`
+        `Are you sure you want to kick @${targetUsername} from #${target.room}? They will not be able to see or rejoin this room.`
       )
     )
       return;
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "kick_room",
       room: target.room,
     });
@@ -86,13 +96,13 @@ export default function UserContextMenu({
   const handleBanRoom = () => {
     if (
       !window.confirm(
-        `Blacklist @${target.user.username} from #${target.room}?`
+        `Blacklist @${targetUsername} from #${target.room}?`
       )
     )
       return;
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "ban_room",
       room: target.room,
     });
@@ -101,8 +111,8 @@ export default function UserContextMenu({
 
   const handleUnbanRoom = () => {
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "unban_room",
       room: target.room,
     });
@@ -112,13 +122,13 @@ export default function UserContextMenu({
   const handleGlobalBan = () => {
     if (
       !window.confirm(
-        `🚨 PERMANENT GLOBAL BLACKLIST: Ban @${target.user.username} from ALL rooms in the community?`
+        `🚨 PERMANENT GLOBAL BLACKLIST: Ban @${targetUsername} from ALL rooms in the community?`
       )
     )
       return;
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "ban_global",
     });
     onClose();
@@ -126,8 +136,8 @@ export default function UserContextMenu({
 
   const handleUnbanGlobal = () => {
     socket?.emit("moderate_user", {
-      targetUserId: target.user.userId,
-      targetUsername: target.user.username,
+      targetUserId: targetId,
+      targetUsername: targetUsername,
       action: "unban_global",
     });
     onClose();
@@ -137,10 +147,10 @@ export default function UserContextMenu({
     e.preventDefault();
     if (!newPassword || newPassword.length < 4) return;
     try {
-      await api.post(`/admin/users/${target.user.userId}/reset-password`, {
+      await api.post(`/admin/users/${targetId}/reset-password`, {
         newPassword,
       });
-      alert(`Password for @${target.user.username} has been reset successfully!`);
+      alert(`Password for @${targetUsername} has been reset successfully!`);
       onClose();
     } catch (err) {
       alert(err.response?.data?.message || "Failed to reset password");
@@ -161,14 +171,14 @@ export default function UserContextMenu({
         {/* User Card Header */}
         <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2 mb-1">
           <div className="w-6 h-6 rounded-lg bg-indigo-500/30 text-indigo-300 font-bold flex items-center justify-center text-[10px]">
-            {target.user.username[0]?.toUpperCase()}
+            {targetUser.username?.[0]?.toUpperCase() || "?"}
           </div>
           <div className="min-w-0">
             <span className="font-bold text-white block truncate text-[11px]">
-              @{target.user.username}
+              @{targetUser.username}
             </span>
             <span className="text-[9px] text-slate-400 block leading-none">
-              {target.user.isAdmin ? "👑 Administrator" : "Community Member"}
+              {targetUser.isAdmin ? "👑 Administrator" : "Community Member"}
             </span>
           </div>
         </div>
@@ -178,7 +188,7 @@ export default function UserContextMenu({
           <button
             type="button"
             onClick={() => {
-              onStartDM(target.user);
+              onStartDM(targetUser);
               onClose();
             }}
             className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
@@ -312,7 +322,7 @@ export default function UserContextMenu({
                       </>
                     )}
 
-                    {currentUser.isAdmin && (
+                    {currentUser?.isAdmin && (
                       <>
                         <div className="my-1 border-t border-white/10" />
                         <button
@@ -349,7 +359,7 @@ export default function UserContextMenu({
             )}
 
             {/* RESET PASSWORD (Admin Only) */}
-            {currentUser.isAdmin && (
+            {currentUser?.isAdmin && (
               <>
                 <div className="my-1 border-t border-white/10" />
                 <button
@@ -376,7 +386,7 @@ export default function UserContextMenu({
               className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/20 p-5 shadow-2xl"
             >
               <h4 className="text-sm font-bold text-white mb-1">
-                Reset Password for @{target.user.username}
+                Reset Password for @{targetUser.username}
               </h4>
               <p className="text-[11px] text-slate-400 mb-3">
                 Enter a new password for this user in the MongoDB database.

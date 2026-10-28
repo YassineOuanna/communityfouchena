@@ -23,8 +23,11 @@ export default function ChatWindow({
   const [notice, setNotice] = useState("");
   const bottomRef = useRef(null);
 
+  const currentUserId = user?.id || user?._id || "";
+  const currentUsername = user?.username || "";
+
   const currentRoom = activeDM
-    ? `dm_${[user.id, activeDM.userId].sort().join("_")}`
+    ? `dm_${[currentUserId, activeDM.userId || activeDM.id || ""].sort().join("_")}`
     : activeRoom?.name || "global";
 
   // Helper: Strictly check if this tab is active, focused and visible to the user
@@ -92,7 +95,7 @@ export default function ChatWindow({
         return [...prev, msg];
       });
       // ONLY mark as seen if tab is actively focused and visible!
-      if (msg.senderName !== user.username && isTabActiveAndVisible()) {
+      if (msg.senderName !== currentUsername && isTabActiveAndVisible()) {
         socket.emit("mark_seen", { room: currentRoom });
       }
     };
@@ -104,7 +107,7 @@ export default function ChatWindow({
           return [...prev, msg];
         });
         // ONLY mark as seen if tab is actively focused and visible!
-        if (msg.senderName !== user.username && isTabActiveAndVisible()) {
+        if (msg.senderName !== currentUsername && isTabActiveAndVisible()) {
           socket.emit("mark_seen", { room: currentRoom });
         }
       }
@@ -132,7 +135,7 @@ export default function ChatWindow({
     };
 
     const onTyping = ({ username, isTyping }) => {
-      if (username === user.username) return;
+      if (username === currentUsername) return;
       setTypers((prev) =>
         isTyping ? [...new Set([...prev, username])] : prev.filter((t) => t !== username)
       );
@@ -174,7 +177,7 @@ export default function ChatWindow({
       socket.off("moderation_alert", onNotice);
       socket.off("error", onError);
     };
-  }, [socket, currentRoom, user.username, isTabActiveAndVisible]);
+  }, [socket, currentRoom, currentUsername, isTabActiveAndVisible]);
 
   // Auto-scroll
   useEffect(() => {
@@ -297,7 +300,7 @@ export default function ChatWindow({
             <MessageBubble
               key={msg._id}
               msg={msg}
-              isOwn={msg.senderName === user.username}
+              isOwn={msg.senderName === currentUsername}
               seenBy={activeSeenBy}
               onUserContextMenu={onUserContextMenu}
             />

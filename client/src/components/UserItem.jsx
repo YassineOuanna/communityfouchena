@@ -1,7 +1,8 @@
 import React from "react";
 
 export default function UserItem({ user, currentUserId, onClick, isSelected, onContextMenu }) {
-  const isMe = user.userId === currentUserId;
+  if (!user) return null;
+  const isMe = (user.userId || user.id || user._id) === currentUserId;
 
   return (
     <div

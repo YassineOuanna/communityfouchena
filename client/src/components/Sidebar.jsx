@@ -10,7 +10,7 @@ import AdBanner, { AD_CONFIG } from "./AdBanner";
 import api from "../utils/api";
 
 export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM, onLogout, onUserContextMenu }) {
-  const { onlineUsers, isConnected } = useSocket();
+  const { onlineUsers = [], isConnected = false } = useSocket() || {};
   const { user } = useAuth();
   const [rooms, setRooms] = useState([{ name: "global", description: "General community chat" }]);
   const [showRoomModal, setShowRoomModal] = useState(false);
@@ -20,7 +20,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
 
   useEffect(() => {
     api.get("/rooms").then((res) => {
-      setRooms([{ name: "global", description: "General community chat" }, ...res.data]);
+      setRooms([{ name: "global", description: "General community chat" }, ...(res.data || [])]);
     }).catch(() => {});
   }, []);
 
@@ -77,7 +77,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 relative z-10">
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h13.5m-13.5 7.5h13.5m-1.5-12l-3 16.5m-6-16.5l-3 16.5" />
             </svg>
-            <span className="relative z-10">Channels ({rooms.length})</span>
+            <span className="relative z-10">Channels ({rooms?.length || 0})</span>
           </button>
 
           <button
@@ -97,7 +97,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 relative z-10">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
             </svg>
-            <span className="relative z-10">Online ({onlineUsers.length})</span>
+            <span className="relative z-10">Online ({onlineUsers?.length || 0})</span>
           </button>
         </div>
       </div>
