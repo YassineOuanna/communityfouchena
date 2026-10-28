@@ -63,12 +63,13 @@ app.get("*", (req, res, next) => {
 require("./socket/handlers")(io);
 
 // MongoDB Atlas connection
-const MONGO_URI = process.env.MONGO_URI;
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  "mongodb+srv://daly232007_db_user:Kkbbffmm99**--@cluster0.qtcstpn.mongodb.net/communityfouchena?retryWrites=true&w=majority";
 
-if (!MONGO_URI || MONGO_URI.includes("<username>")) {
-  console.error("❌ ERROR: Please set your MongoDB Atlas URI in server/.env");
-  process.exit(1);
-}
+const JWT_SECRET =
+  process.env.JWT_SECRET || "communityfouchena_super_secret_jwt_key_2026_xyz";
+process.env.JWT_SECRET = JWT_SECRET;
 
 mongoose
   .connect(MONGO_URI, {

@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "description": "Anonymous real-time chat web app inspired by Facebook Messenger",
   "scripts": {
-    "build": "npm --prefix server install && npm --prefix client install --include=dev && npm --prefix client run build",
+    "postinstall": "cd server && npm install && cd ../client && npm install --include=dev && npm run build",
+    "build": "cd server && npm install && cd ../client && npm install --include=dev && npm run build",
     "start": "node server/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   },
   "keywords": [
     "chat",
