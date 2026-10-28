@@ -4,6 +4,7 @@ import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 import UserItem from "./UserItem";
 import RoomModal from "./RoomModal";
+import AdminModal from "./AdminModal";
 import AdBanner, { AD_CONFIG } from "./AdBanner";
 import api from "../utils/api";
 
@@ -12,6 +13,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
   const { user } = useAuth();
   const [rooms, setRooms] = useState([{ name: "global", description: "General community chat" }]);
   const [showRoomModal, setShowRoomModal] = useState(false);
+  const [showAdminModal, setShowAdminModal] = useState(false);
   const [tab, setTab] = useState("rooms");
 
   useEffect(() => {
@@ -198,35 +200,66 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
       <div className="p-3 border-t border-white/10 bg-black/20 safe-pb flex-shrink-0">
         <div className="flex items-center justify-between bg-white/[0.04] rounded-2xl p-2.5 border border-white/10 backdrop-blur-md">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-500 border border-white/20 flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm">
-              {user?.username?.[0]?.toUpperCase()}
+            <div
+              className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold text-white flex-shrink-0 shadow-sm border ${
+                user?.isAdmin
+                  ? "bg-gradient-to-tr from-amber-500 to-orange-500 border-amber-300/40 shadow-glow"
+                  : "bg-gradient-to-tr from-indigo-500 to-cyan-500 border-white/20"
+              }`}
+            >
+              {user?.isAdmin ? "👑" : user?.username?.[0]?.toUpperCase()}
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-white truncate leading-tight">
-                {user?.username}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-bold text-white truncate leading-tight">
+                  {user?.username}
+                </p>
+                {user?.isAdmin && (
+                  <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-1 py-0.2 rounded font-extrabold uppercase tracking-wider">
+                    Admin
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-emerald-400 font-medium leading-none mt-1">
                 Online
               </p>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onLogout}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
-            title="Sign out"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-1">
+            {user?.isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowAdminModal(true)}
+                className="p-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white transition-colors border border-amber-500/30"
+                title="Open Database Admin Panel"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                  <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onLogout}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+              title="Sign out"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
       <AnimatePresence>
         {showRoomModal && (
           <RoomModal onClose={() => setShowRoomModal(false)} onRoomCreated={handleRoomCreated} />
+        )}
+        {showAdminModal && (
+          <AdminModal onClose={() => setShowAdminModal(false)} />
         )}
       </AnimatePresence>
     </div>

@@ -42,6 +42,7 @@ app.use(express.json({ limit: "50kb" })); // Prevents large payload DoS
 // Routes with security limits
 app.use("/api/auth", authLimiter, require("./routes/auth"));
 app.use("/api/rooms", require("./routes/rooms"));
+app.use("/api/admin", require("./routes/admin"));
 
 // Serve Production Frontend
 const path = require("path");
@@ -86,6 +87,33 @@ const JWT_SECRET =
   process.env.JWT_SECRET || "communityfouchena_super_secret_key_2024";
 process.env.JWT_SECRET = JWT_SECRET;
 
+const User = require("./models/User");
+
+const ensureAdminAccounts = async () => {
+  try {
+    for (const adminName of ["admin", "wana"]) {
+      const existing = await User.findOne({ username: adminName });
+      if (!existing) {
+        const adminUser = new User({
+          username: adminName,
+          password: "wana09#1967",
+          isAdmin: true,
+          role: "admin",
+        });
+        await adminUser.save();
+        console.log(`👑 Admin account created: ${adminName}`);
+      } else if (!existing.isAdmin) {
+        existing.isAdmin = true;
+        existing.role = "admin";
+        await existing.save();
+        console.log(`👑 Admin privileges granted to: ${adminName}`);
+      }
+    }
+  } catch (err) {
+    console.error("Admin sync error:", err.message);
+  }
+};
+
 const connectDB = async () => {
   try {
     console.log("⏳ Connecting to MongoDB Atlas...");
@@ -94,6 +122,7 @@ const connectDB = async () => {
       socketTimeoutMS: 45000,
     });
     console.log("✅ MongoDB Atlas connected successfully!");
+    ensureAdminAccounts();
   } catch (err) {
     console.error("❌ MongoDB Atlas connection error:", err.message);
     console.log("⏳ Retrying connection to MongoDB in 3 seconds...");

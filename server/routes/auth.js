@@ -1,11 +1,11 @@
-﻿const express = require("express");
+const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
 const signToken = (user) =>
   jwt.sign(
-    { id: user._id, username: user.username },
+    { id: user._id, username: user.username, isAdmin: !!user.isAdmin },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
@@ -25,13 +25,19 @@ router.post("/register", async (req, res) => {
       username: username.trim(),
       password,
       email: email && email.trim() ? email.trim() : null,
+      isAdmin: false,
     });
     await user.save();
 
     const token = signToken(user);
     res.status(201).json({
       token,
-      user: { id: user._id, username: user.username, email: user.email },
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isAdmin: !!user.isAdmin,
+      },
     });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
@@ -56,7 +62,12 @@ router.post("/login", async (req, res) => {
     const token = signToken(user);
     res.json({
       token,
-      user: { id: user._id, username: user.username, email: user.email },
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isAdmin: !!user.isAdmin,
+      },
     });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
