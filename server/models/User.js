@@ -35,14 +35,42 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["user", "admin"],
+    enum: ["user", "moderator", "admin"],
     default: "user",
+  },
+  tokenVersion: {
+    type: Number,
+    default: 0,
   },
   isBanned: {
     type: Boolean,
     default: false,
   },
+  banReason: {
+    type: String,
+    default: "",
+  },
+  bannedAt: {
+    type: Date,
+    default: null,
+  },
+  bannedUntil: {
+    type: Date,
+    default: null, // null = permanent
+  },
+  isMuted: {
+    type: Boolean,
+    default: false,
+  },
   mutedUntil: {
+    type: Date,
+    default: null, // null = permanent if isMuted is true
+  },
+  muteReason: {
+    type: String,
+    default: "",
+  },
+  mutedAt: {
     type: Date,
     default: null,
   },

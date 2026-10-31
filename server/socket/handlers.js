@@ -2,117 +2,159 @@ const jwt = require("jsonwebtoken");
 const Message = require("../models/Message");
 const User = require("../models/User");
 const Room = require("../models/Room");
+const AuditLog = require("../models/AuditLog");
+const BannedIdentifier = require("../models/BannedIdentifier");
+const { getUserRestrictions } = require("../utils/restrictions");
 
-// online users map: socketId -> { userId, username, isAdmin, customStatus, avatar }
+// Tracking maps
+// userSockets: userId -> Set<socketId> (tracks all open tabs/devices per user)
+const userSockets = new Map();
+// onlineUsers: socketId -> { userId, username, isAdmin, role, customStatus, avatar }
 const onlineUsers = new Map();
 
+// Helper to determine security hierarchy levels
+function getRoleLevel(username = "", userDoc = null) {
+  const u = (username || "").toLowerCase();
+  if (["admin", "wana"].includes(u)) return 100; // Master Admin
+  if (userDoc?.isAdmin || userDoc?.role === "admin") return 50; // Admin
+  if (userDoc?.role === "moderator") return 30; // Moderator
+  return 0; // Standard User
+}
+
 module.exports = (io) => {
-  // Authenticate socket connection via token
-  io.use((socket, next) => {
+  // ==========================================
+  // HANDSHAKE: Authenticate & Enforce Ban Check
+  // ==========================================
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("Authentication required"));
+
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.user = decoded;
+      if (!decoded || !decoded.id) {
+        return next(new Error("Invalid session token"));
+      }
+
+      const user = await User.findById(decoded.id);
+      if (!user) {
+        return next(new Error("User account not found"));
+      }
+
+      // 1. Check Central Restrictions: Auto-reconnect fails if banned!
+      const restrictions = await getUserRestrictions(user._id);
+      if (restrictions.isGlobalBanned) {
+        return next(
+          new Error(
+            `BANNED: Your account is blacklisted from CommunityFouchena. Reason: ${
+              restrictions.banReason || "Violation of rules"
+            }`
+          )
+        );
+      }
+
+      // 2. Check session revocation (e.g. password reset / logout)
+      if (decoded.tokenVersion !== undefined && user.tokenVersion !== decoded.tokenVersion) {
+        return next(new Error("SESSION_REVOKED: Your session was invalidated. Please log in again."));
+      }
+
+      socket.user = {
+        id: user._id.toString(),
+        _id: user._id,
+        username: user.username,
+        isAdmin: !!user.isAdmin || ["admin", "wana"].includes(user.username.toLowerCase()),
+        role: user.role,
+        customStatus: user.customStatus,
+        avatar: user.avatar,
+      };
       next();
-    } catch {
+    } catch (err) {
       next(new Error("Invalid or expired session token"));
     }
   });
 
   io.on("connection", async (socket) => {
-    const { id: userId, username } = socket.user;
-    const isAdmin = socket.user.isAdmin || ["admin", "wana"].includes((username || "").toLowerCase());
+    const { id: userId, username, isAdmin, role, customStatus, avatar } = socket.user;
 
-    let userDocData = null;
-    try {
-      userDocData = await User.findById(userId).select("customStatus avatar");
-    } catch {}
+    // Track multi-tab sockets for this user
+    if (!userSockets.has(userId)) {
+      userSockets.set(userId, new Set());
+    }
+    userSockets.get(userId).add(socket.id);
 
     onlineUsers.set(socket.id, {
       userId,
       username,
       isAdmin,
-      customStatus: userDocData?.customStatus || "Exploring the community ✨",
-      avatar: userDocData?.avatar || null,
+      role,
+      customStatus: customStatus || "Exploring the community ✨",
+      avatar: avatar || null,
     });
 
     // Broadcast updated online list
     io.emit("online_users", getOnlineList());
 
-    // Join a room (with ban and kick validation)
+    // Send initial restrictions state in background without blocking listener registration
+    getUserRestrictions(userId, "global")
+      .then((initialRestrictions) => {
+        socket.emit("restrictions_state", initialRestrictions);
+      })
+      .catch(() => {});
+
+    // ==========================================
+    // 1. JOIN ROOM: Strict Ban & Kick Rejection
+    // ==========================================
     socket.on("join_room", async ({ room }) => {
       if (!room || typeof room !== "string") return;
       const cleanRoom = room.slice(0, 50).trim();
 
-      if (!cleanRoom.startsWith("dm_")) {
-        const roomDoc = await Room.findOne({ name: cleanRoom });
-        if (roomDoc) {
-          const isKicked = roomDoc.kickedUsers?.some((u) => u.username === username || u.userId?.toString() === userId);
-          const isBanned = roomDoc.bannedUsers?.some((u) => u.username === username || u.userId?.toString() === userId);
-          if (isKicked || isBanned) {
-            socket.emit("kicked_from_room", {
-              room: cleanRoom,
-              message: "You are not allowed to access #" + cleanRoom + " (kicked or blacklisted).",
-            });
-            return;
-          }
-        }
+      const restrictions = await getUserRestrictions(userId, cleanRoom);
+      if (!restrictions.canAccessRoom) {
+        socket.emit("kicked_from_room", {
+          room: cleanRoom,
+          message: restrictions.accessBlockReason,
+          isRoomBanned: restrictions.isRoomBanned,
+          isKicked: restrictions.isKicked,
+        });
+        return;
       }
 
-      socket.rooms.forEach((r) => { if (r !== socket.id) socket.leave(r); });
+      socket.rooms.forEach((r) => {
+        if (r !== socket.id) socket.leave(r);
+      });
       socket.join(cleanRoom);
       socket.currentRoom = cleanRoom;
+
+      // Provide room-specific restrictions state
+      socket.emit("restrictions_state", restrictions);
     });
 
-    // Send message to room (with reply, attachment, moderation enforcement)
+    // ==========================================
+    // 2. SEND MESSAGE: Central Mute & Ban Check
+    // ==========================================
     socket.on("send_message", async ({ room, content, replyTo, attachment }) => {
       const hasContent = content && typeof content === "string" && content.trim().length > 0;
       const hasAttachment = attachment && (attachment.url || attachment.data);
       if (!hasContent && !hasAttachment) return;
 
-      const cleanContent = hasContent ? content.trim().slice(0, 2000) : "";
       if (!room || typeof room !== "string") return;
       const cleanRoom = room.slice(0, 50).trim();
 
+      // ONE CENTRAL CHECK
+      const restrictions = await getUserRestrictions(userId, cleanRoom);
+      if (!restrictions.canSend) {
+        socket.emit("muted_error", {
+          error: "muted",
+          reason: restrictions.sendBlockReason,
+          until: restrictions.effectiveMutedUntil,
+          remainingSeconds: restrictions.effectiveMuteRemainingSeconds,
+          message: `You are restricted from sending messages: ${restrictions.sendBlockReason}`,
+        });
+        return; // REJECTED! Message is NOT saved and NOT broadcast to anyone.
+      }
+
+      const cleanContent = hasContent ? content.trim().slice(0, 2000) : "";
+
       try {
-        // 1. Check global ban & global mute
-        const userDoc = await User.findById(userId);
-        if (userDoc?.isBanned) {
-          socket.emit("error", { message: "Your account has been blacklisted from the community." });
-          return;
-        }
-        if (userDoc?.mutedUntil && new Date(userDoc.mutedUntil) > new Date()) {
-          const timeLeft = Math.ceil((new Date(userDoc.mutedUntil) - new Date()) / 60000);
-          socket.emit("error", { message: `You are globally muted for another ${timeLeft} minute(s).` });
-          return;
-        }
-
-        // 2. Check room-level mute & ban
-        if (!cleanRoom.startsWith("dm_")) {
-          const roomDoc = await Room.findOne({ name: cleanRoom });
-          if (roomDoc) {
-            const isBanned = roomDoc.bannedUsers?.some((u) => u.username === username || u.userId?.toString() === userId);
-            const isKicked = roomDoc.kickedUsers?.some((u) => u.username === username || u.userId?.toString() === userId);
-            if (isBanned || isKicked) {
-              socket.emit("error", { message: "You are blacklisted/kicked from #" + cleanRoom });
-              return;
-            }
-
-            const muteEntry = roomDoc.mutedUsers?.find((u) => u.username === username || u.userId?.toString() === userId);
-            if (muteEntry) {
-              if (!muteEntry.until) {
-                socket.emit("error", { message: `You are permanently muted in #${cleanRoom}.` });
-                return;
-              } else if (new Date(muteEntry.until) > new Date()) {
-                const mins = Math.ceil((new Date(muteEntry.until) - new Date()) / 60000);
-                socket.emit("error", { message: `You are muted in #${cleanRoom} for another ${mins} minute(s).` });
-                return;
-              }
-            }
-          }
-        }
-
         const msgPayload = {
           sender: userId,
           senderName: username,
@@ -146,22 +188,38 @@ module.exports = (io) => {
       }
     });
 
-    // Send DM (with ban check, replyTo, attachment)
+    // ==========================================
+    // 3. SEND DM: Check Global Mute & Ban
+    // ==========================================
     socket.on("send_dm", async ({ toUserId, toUsername, content, replyTo, attachment }) => {
       const hasContent = content && typeof content === "string" && content.trim().length > 0;
       const hasAttachment = attachment && (attachment.url || attachment.data);
       if (!hasContent && !hasAttachment) return;
       if (!toUserId) return;
 
+      // ONE CENTRAL CHECK
+      const restrictions = await getUserRestrictions(userId);
+      if (!restrictions.canSend) {
+        socket.emit("muted_error", {
+          error: "muted",
+          reason: restrictions.sendBlockReason,
+          until: restrictions.effectiveMutedUntil,
+          remainingSeconds: restrictions.effectiveMuteRemainingSeconds,
+          message: `You cannot send DMs while restricted: ${restrictions.sendBlockReason}`,
+        });
+        return;
+      }
+
+      // Check target restrictions
+      const targetRestrictions = await getUserRestrictions(toUserId);
+      if (targetRestrictions.isGlobalBanned) {
+        socket.emit("error", { message: "Cannot message a blacklisted user." });
+        return;
+      }
+
       const cleanContent = hasContent ? content.trim().slice(0, 2000) : "";
 
       try {
-        const userDoc = await User.findById(userId);
-        if (userDoc?.isBanned) {
-          socket.emit("error", { message: "Your account is blacklisted." });
-          return;
-        }
-
         const msgPayload = {
           sender: userId,
           senderName: username,
@@ -191,8 +249,10 @@ module.exports = (io) => {
 
         const msg = await Message.create(msgPayload);
 
-        for (const [sId, u] of onlineUsers) {
-          if (u.userId === toUserId) {
+        // Deliver to target user sockets
+        const targetSockets = userSockets.get(toUserId);
+        if (targetSockets) {
+          for (const sId of targetSockets) {
             io.to(sId).emit("new_dm", { ...msg.toObject(), fromUsername: username });
           }
         }
@@ -202,9 +262,18 @@ module.exports = (io) => {
       }
     });
 
-    // Edit message
+    // ==========================================
+    // 4. EDIT MESSAGE: Block if Muted or Unauthorized
+    // ==========================================
     socket.on("edit_message", async ({ messageId, newContent, room }) => {
       if (!messageId || !newContent || typeof newContent !== "string") return;
+
+      const restrictions = await getUserRestrictions(userId, room);
+      if (restrictions.isMuted || !restrictions.canSend) {
+        socket.emit("muted_error", { message: "Cannot edit messages while muted." });
+        return;
+      }
+
       try {
         const msg = await Message.findById(messageId);
         if (!msg) return;
@@ -222,7 +291,9 @@ module.exports = (io) => {
       }
     });
 
-    // Delete message
+    // ==========================================
+    // 5. DELETE MESSAGE
+    // ==========================================
     socket.on("delete_message", async ({ messageId, room }) => {
       if (!messageId) return;
       try {
@@ -243,9 +314,18 @@ module.exports = (io) => {
       }
     });
 
-    // Emoji reaction toggle
+    // ==========================================
+    // 6. REACT TO MESSAGE: Block if Muted
+    // ==========================================
     socket.on("react_message", async ({ messageId, emoji, room }) => {
       if (!messageId || !emoji) return;
+
+      const restrictions = await getUserRestrictions(userId, room);
+      if (restrictions.isMuted) {
+        socket.emit("muted_error", { message: "Cannot react while muted." });
+        return;
+      }
+
       try {
         const msg = await Message.findById(messageId);
         if (!msg) return;
@@ -282,26 +362,30 @@ module.exports = (io) => {
       }
     });
 
-    // Update profile custom status
-    socket.on("update_custom_status", async ({ status }) => {
-      try {
-        const clean = (status || "").slice(0, 100);
-        await User.findByIdAndUpdate(userId, { customStatus: clean });
-        for (const [sId, u] of onlineUsers) {
-          if (u.userId === userId) {
-            u.customStatus = clean;
-          }
-        }
-        io.emit("online_users", getOnlineList());
-      } catch (err) {}
+    // ==========================================
+    // 7. TYPING INDICATOR: Block if Muted
+    // ==========================================
+    socket.on("typing", async ({ room, isTyping }) => {
+      if (!room || typeof room !== "string") return;
+      const restrictions = await getUserRestrictions(userId, room);
+      if (restrictions.isMuted || !restrictions.canSend) return; // Silent block
+      socket.to(room).emit("user_typing", { username, isTyping: !!isTyping });
     });
 
-    // Calling signaling (Voice and Video)
-    socket.on("call_user", ({ toUserId, toUsername, room, type }) => {
-      // Direct call
+    // ==========================================
+    // 8. CALLS: Block if Muted or Banned
+    // ==========================================
+    socket.on("call_user", async ({ toUserId, toUsername, room, type }) => {
+      const restrictions = await getUserRestrictions(userId, room);
+      if (restrictions.isMuted || !restrictions.canSend) {
+        socket.emit("muted_error", { message: "Cannot start calls while restricted." });
+        return;
+      }
+
       if (toUserId) {
-        for (const [sId, u] of onlineUsers) {
-          if (u.userId === toUserId) {
+        const targetSockets = userSockets.get(toUserId);
+        if (targetSockets) {
+          for (const sId of targetSockets) {
             io.to(sId).emit("incoming_call", {
               fromUserId: userId,
               fromUsername: username,
@@ -321,10 +405,12 @@ module.exports = (io) => {
     });
 
     socket.on("call_response", ({ toUserId, action, room }) => {
-      // action: "accepted" | "rejected" | "ended"
-      for (const [sId, u] of onlineUsers) {
-        if (u.userId === toUserId) {
-          io.to(sId).emit("call_status", { fromUserId: userId, fromUsername: username, action, room });
+      if (toUserId) {
+        const targetSockets = userSockets.get(toUserId);
+        if (targetSockets) {
+          for (const sId of targetSockets) {
+            io.to(sId).emit("call_status", { fromUserId: userId, fromUsername: username, action, room });
+          }
         }
       }
       if (room) {
@@ -332,171 +418,347 @@ module.exports = (io) => {
       }
     });
 
-    // Moderate User (Kick, Mute with durations, Blacklist / Ban)
-    socket.on("moderate_user", async ({ targetUserId, targetUsername, action, room, durationMinutes }) => {
-      const callerIsAdmin = isAdmin || ["admin", "wana"].includes((username || "").toLowerCase());
-      let isRoomCreator = false;
+    // ==========================================
+    // 9. MODERATION: Server-side Verification & Multi-tab Effect
+    // ==========================================
+    socket.on("moderate_user", async ({ targetUserId, targetUsername, action, room, durationMinutes, reason }) => {
+      // 1. Verify Caller role directly from DB (NEVER trust client payload)
+      let callerDoc = null;
+      try {
+        callerDoc = await User.findById(userId);
+      } catch {}
+      if (!callerDoc) {
+        socket.emit("error", { message: "Authentication failed" });
+        return;
+      }
 
+      // 2. Identify Target User
+      let targetUser = null;
+      if (targetUserId) {
+        targetUser = await User.findById(targetUserId);
+      }
+      if (!targetUser && targetUsername) {
+        targetUser = await User.findOne({ username: new RegExp(`^${targetUsername}$`, "i") });
+      }
+      if (!targetUser) {
+        socket.emit("error", { message: "Target user not found" });
+        return;
+      }
+
+      const effectiveTargetId = targetUser._id.toString();
+      const effectiveTargetName = targetUser.username;
+
+      // 3. Security Checks (Requirement H)
+      // Cannot moderate yourself
+      if (effectiveTargetId === userId) {
+        socket.emit("error", { message: "You cannot perform moderation actions on yourself." });
+        return;
+      }
+
+      const callerLevel = getRoleLevel(callerDoc.username, callerDoc);
+      const targetLevel = getRoleLevel(targetUser.username, targetUser);
+
+      // Check Room creator status
+      let isRoomCreator = false;
       if (room && !room.startsWith("dm_")) {
         const rDoc = await Room.findOne({ name: room });
-        if (rDoc && (rDoc.createdBy?.toString() === userId || rDoc.creator === username)) {
+        if (rDoc && (rDoc.createdBy?.toString() === userId || rDoc.creator === callerDoc.username)) {
           isRoomCreator = true;
         }
       }
 
-      if (!callerIsAdmin && !isRoomCreator && room !== "global") {
-        socket.emit("error", { message: "You do not have moderator permissions for this action." });
+      // Master admin check
+      if (targetLevel >= 100) {
+        socket.emit("moderation_error", { message: "Cannot perform moderation actions on master administrators." });
+        socket.emit("error", { message: "Cannot perform moderation actions on master administrators." });
         return;
       }
 
-      if (["admin"].includes((targetUsername || "").toLowerCase()) && (username || "").toLowerCase() !== "admin") {
-        socket.emit("error", { message: "Cannot moderate master administrator accounts." });
+      // Hierarchy rule: Caller must outrank target
+      if (callerLevel <= targetLevel) {
+        socket.emit("moderation_error", { message: "Permission denied: Target user holds an equal or higher role." });
+        socket.emit("error", { message: "Permission denied: Target user holds an equal or higher role." });
         return;
       }
+
+      // Global actions require at least Admin role (level 50+)
+      const isGlobalAction = ["ban_global", "unban_global", "mute_global", "unmute_global"].includes(action);
+      if (isGlobalAction && callerLevel < 50) {
+        socket.emit("moderation_error", { message: "Global moderation requires administrator privileges." });
+        socket.emit("error", { message: "Global moderation requires administrator privileges." });
+        return;
+      }
+
+      // Room actions require room creator or admin
+      if (!isGlobalAction && callerLevel < 50 && !isRoomCreator) {
+        socket.emit("moderation_error", { message: "You do not have moderator permissions for this room." });
+        socket.emit("error", { message: "You do not have moderator permissions for this room." });
+        return;
+      }
+
+      const cleanReason = reason && typeof reason === "string" ? reason.trim().slice(0, 200) : "Violating community standards";
+      const targetSocketIds = userSockets.get(effectiveTargetId) || new Set();
 
       try {
-        const targetSockets = [];
-        for (const [sId, u] of onlineUsers) {
-          if (u.username === targetUsername || u.userId === targetUserId) {
-            targetSockets.push(sId);
-          }
-        }
-
-        // 1. KICK FROM CHANNEL
+        // ------------------------------------------
+        // A. KICK FROM ROOM (All open tabs/devices)
+        // ------------------------------------------
         if (action === "kick_room" && room) {
           await Room.findOneAndUpdate(
             { name: room },
-            { $addToSet: { kickedUsers: { userId: targetUserId, username: targetUsername, kickedAt: new Date() } } }
+            {
+              $setOnInsert: { description: "Community Channel", createdBy: callerDoc._id },
+              $addToSet: {
+                kickedUsers: {
+                  userId: effectiveTargetId,
+                  username: effectiveTargetName,
+                  reason: cleanReason,
+                  kickedAt: new Date(),
+                },
+              },
+            },
+            { upsert: true }
           );
 
-          for (const sId of targetSockets) {
-            const targetSocket = io.sockets.sockets.get(sId);
-            if (targetSocket) {
-              targetSocket.leave(room);
-              targetSocket.emit("kicked_from_room", {
+          // Remove ALL tabs/devices of target from socket channel
+          for (const sId of targetSocketIds) {
+            const tSock = io.sockets.sockets.get(sId);
+            if (tSock) {
+              tSock.leave(room);
+              tSock.emit("kicked_from_room", {
                 room,
-                message: `You were kicked from #${room}. You will no longer see this room.`,
+                message: `You were removed from #${room} by @${callerDoc.username}. Reason: ${cleanReason}`,
+                reason: cleanReason,
               });
             }
           }
+
+          // Broadcast system message in room (Requirement G)
           io.to(room).emit("moderation_alert", {
-            message: `@${targetUsername} was kicked from #${room} by @${username}.`,
+            room,
+            message: `@${effectiveTargetName} was removed from #${room} by @${callerDoc.username}. Reason: ${cleanReason}`,
           });
-          socket.emit("moderation_success", { message: `@${targetUsername} kicked from #${room}.` });
+
+          socket.emit("moderation_success", { message: `@${effectiveTargetName} kicked from #${room}.` });
         }
 
-        // 2. MUTE USER (with durations or permanent)
+        // ------------------------------------------
+        // B. MUTE IN ROOM (With Expiry)
+        // ------------------------------------------
         else if (action === "mute_room" && room) {
           const until = durationMinutes ? new Date(Date.now() + durationMinutes * 60 * 1000) : null;
+
           await Room.findOneAndUpdate(
             { name: room },
-            { $pull: { mutedUsers: { username: targetUsername } } }
+            {
+              $setOnInsert: { description: "Community Channel", createdBy: callerDoc._id },
+              $pull: { mutedUsers: { username: effectiveTargetName } }
+            },
+            { upsert: true }
           );
           await Room.findOneAndUpdate(
             { name: room },
-            { $push: { mutedUsers: { userId: targetUserId, username: targetUsername, until, mutedAt: new Date() } } }
+            {
+              $push: {
+                mutedUsers: {
+                  userId: effectiveTargetId,
+                  username: effectiveTargetName,
+                  reason: cleanReason,
+                  until,
+                  mutedAt: new Date(),
+                },
+              },
+            },
+            { upsert: true }
           );
 
-          const durationText = durationMinutes ? `${durationMinutes}m` : "permanently";
-          for (const sId of targetSockets) {
-            io.to(sId).emit("moderation_notice", {
-              action: "muted",
+          const durStr = durationMinutes ? `${durationMinutes} minute(s)` : "permanently";
+          // Instant live effect on all open tabs (Requirement F)
+          for (const sId of targetSocketIds) {
+            io.to(sId).emit("user_muted", {
               room,
-              message: `You have been muted in #${room} (${durationText}) by @${username}.`,
+              until,
+              durationMinutes,
+              reason: cleanReason,
+              message: `You have been muted in #${room} for ${durStr} by @${callerDoc.username}. Reason: ${cleanReason}`,
             });
           }
+
+          // System message to room (Requirement G)
           io.to(room).emit("moderation_alert", {
-            message: `@${targetUsername} was muted in #${room} (${durationText}).`,
+            room,
+            message: `@${effectiveTargetName} was muted in #${room} for ${durStr} by @${callerDoc.username}. Reason: ${cleanReason}`,
           });
-          socket.emit("moderation_success", { message: `@${targetUsername} muted in #${room} (${durationText}).` });
+
+          socket.emit("moderation_success", { message: `@${effectiveTargetName} muted in #${room} (${durStr}).` });
         }
 
-        // 3. UNMUTE USER
+        // ------------------------------------------
+        // C. UNMUTE IN ROOM
+        // ------------------------------------------
         else if (action === "unmute_room" && room) {
           await Room.findOneAndUpdate(
             { name: room },
-            { $pull: { mutedUsers: { username: targetUsername } } }
+            { $pull: { mutedUsers: { username: effectiveTargetName } } }
           );
-          for (const sId of targetSockets) {
-            io.to(sId).emit("moderation_notice", {
-              action: "unmuted",
+
+          for (const sId of targetSocketIds) {
+            io.to(sId).emit("user_unmuted", {
               room,
               message: `You have been unmuted in #${room}.`,
             });
           }
-          socket.emit("moderation_success", { message: `@${targetUsername} unmuted in #${room}.` });
+
+          io.to(room).emit("moderation_alert", {
+            room,
+            message: `@${effectiveTargetName} was unmuted in #${room} by @${callerDoc.username}.`,
+          });
+
+          socket.emit("moderation_success", { message: `@${effectiveTargetName} unmuted in #${room}.` });
         }
 
-        // 4. BLACKLIST FROM THIS ROOM
+        // ------------------------------------------
+        // D. BAN FROM ROOM
+        // ------------------------------------------
         else if (action === "ban_room" && room) {
           await Room.findOneAndUpdate(
             { name: room },
-            { $addToSet: { bannedUsers: { userId: targetUserId, username: targetUsername, bannedAt: new Date() } } }
+            {
+              $setOnInsert: { description: "Community Channel", createdBy: callerDoc._id },
+              $addToSet: {
+                bannedUsers: {
+                  userId: effectiveTargetId,
+                  username: effectiveTargetName,
+                  reason: cleanReason,
+                  bannedAt: new Date(),
+                },
+              },
+            },
+            { upsert: true }
           );
 
-          for (const sId of targetSockets) {
-            const targetSocket = io.sockets.sockets.get(sId);
-            if (targetSocket) {
-              targetSocket.leave(room);
-              targetSocket.emit("kicked_from_room", {
+          for (const sId of targetSocketIds) {
+            const tSock = io.sockets.sockets.get(sId);
+            if (tSock) {
+              tSock.leave(room);
+              tSock.emit("kicked_from_room", {
                 room,
-                message: `You have been blacklisted from #${room}.`,
+                message: `You have been blacklisted from #${room}. Reason: ${cleanReason}`,
+                isRoomBanned: true,
               });
             }
           }
+
           io.to(room).emit("moderation_alert", {
-            message: `@${targetUsername} has been blacklisted from #${room}.`,
+            room,
+            message: `@${effectiveTargetName} has been blacklisted from #${room} by @${callerDoc.username}.`,
           });
-          socket.emit("moderation_success", { message: `@${targetUsername} blacklisted from #${room}.` });
+
+          socket.emit("moderation_success", { message: `@${effectiveTargetName} blacklisted from #${room}.` });
         }
 
-        // 5. UNBAN / REMOVE BLACKLIST FROM THIS ROOM
+        // ------------------------------------------
+        // E. UNBAN FROM ROOM
+        // ------------------------------------------
         else if (action === "unban_room" && room) {
           await Room.findOneAndUpdate(
             { name: room },
             {
               $pull: {
-                bannedUsers: { username: targetUsername },
-                kickedUsers: { username: targetUsername },
+                bannedUsers: { username: effectiveTargetName },
+                kickedUsers: { username: effectiveTargetName },
               },
             }
           );
-          socket.emit("moderation_success", { message: `Blacklist removed for @${targetUsername} in #${room}.` });
+          socket.emit("moderation_success", { message: `Blacklist lifted for @${effectiveTargetName} in #${room}.` });
         }
 
-        // 6. GLOBAL BLACKLIST (ALL ROOMS - Admin Only)
-        else if (action === "ban_global" && callerIsAdmin) {
-          await User.findByIdAndUpdate(targetUserId, { isBanned: true });
-          for (const sId of targetSockets) {
-            io.to(sId).emit("force_disconnect", {
-              message: "Your account has been permanently blacklisted from all rooms.",
-            });
+        // ------------------------------------------
+        // F. GLOBAL BAN: Disconnect all tabs, invalidate tokens, evasion protection
+        // ------------------------------------------
+        else if (action === "ban_global") {
+          targetUser.isBanned = true;
+          targetUser.banReason = cleanReason;
+          targetUser.bannedAt = new Date();
+          // Invalidate all existing auth tokens immediately
+          targetUser.tokenVersion = (targetUser.tokenVersion || 0) + 1;
+          await targetUser.save();
+
+          // Store in BannedIdentifier for evasion protection
+          try {
+            await BannedIdentifier.findOneAndUpdate(
+              { type: "username", value: effectiveTargetName.toLowerCase() },
+              { type: "username", value: effectiveTargetName.toLowerCase(), reason: cleanReason, bannedAt: new Date() },
+              { upsert: true }
+            );
+            if (targetUser.email) {
+              await BannedIdentifier.findOneAndUpdate(
+                { type: "email", value: targetUser.email.toLowerCase() },
+                { type: "email", value: targetUser.email.toLowerCase(), reason: cleanReason, bannedAt: new Date() },
+                { upsert: true }
+              );
+            }
+          } catch {}
+
+          // Immediately disconnect ALL open tabs and devices (Requirement D)
+          for (const sId of targetSocketIds) {
             const tSock = io.sockets.sockets.get(sId);
-            tSock?.disconnect(true);
+            if (tSock) {
+              tSock.emit("banned", {
+                reason: cleanReason,
+                message: `Your account has been permanently blacklisted from CommunityFouchena. Reason: ${cleanReason}`,
+              });
+              tSock.disconnect(true);
+            }
+            onlineUsers.delete(sId);
           }
+          userSockets.delete(effectiveTargetId);
+
+          // Broadcast updated online list immediately (Requirement G)
+          io.emit("online_users", getOnlineList());
           io.emit("moderation_alert", {
-            message: `@${targetUsername} was blacklisted from the entire community.`,
+            message: `@${effectiveTargetName} has been permanently blacklisted from the community.`,
           });
-          socket.emit("moderation_success", { message: `@${targetUsername} blacklisted globally.` });
+
+          socket.emit("moderation_success", { message: `@${effectiveTargetName} blacklisted globally.` });
         }
 
-        // 7. REMOVE GLOBAL BLACKLIST (Admin Only)
-        else if (action === "unban_global" && callerIsAdmin) {
-          await User.findByIdAndUpdate(targetUserId, { isBanned: false });
-          socket.emit("moderation_success", { message: `Global blacklist lifted for @${targetUsername}.` });
+        // ------------------------------------------
+        // G. UNBAN GLOBAL
+        // ------------------------------------------
+        else if (action === "unban_global") {
+          targetUser.isBanned = false;
+          targetUser.banReason = "";
+          await targetUser.save();
+
+          await BannedIdentifier.deleteMany({
+            $or: [
+              { type: "username", value: effectiveTargetName.toLowerCase() },
+              ...(targetUser.email ? [{ type: "email", value: targetUser.email.toLowerCase() }] : []),
+            ],
+          });
+
+          socket.emit("moderation_success", { message: `Global blacklist lifted for @${effectiveTargetName}.` });
         }
+
+        // 4. Audit Log (Requirement H)
+        await AuditLog.create({
+          moderatorId: callerDoc._id,
+          moderatorName: callerDoc.username,
+          targetUserId: targetUser._id,
+          targetUsername: effectiveTargetName,
+          action,
+          room: room || null,
+          reason: cleanReason,
+          durationMinutes: durationMinutes || null,
+          ip: socket.handshake.address || "",
+        });
       } catch (err) {
         socket.emit("error", { message: "Moderation action failed: " + err.message });
       }
     });
 
-    // Typing indicator
-    socket.on("typing", ({ room, isTyping }) => {
-      if (!room || typeof room !== "string") return;
-      socket.to(room).emit("user_typing", { username, isTyping: !!isTyping });
-    });
-
-    // Mark messages as seen ONLY when explicitly triggered by an active/focused viewer
+    // Mark messages as seen
     socket.on("mark_seen", async ({ room }) => {
       if (!room || typeof room !== "string") return;
       try {
@@ -517,8 +779,16 @@ module.exports = (io) => {
       }
     });
 
+    // Disconnect
     socket.on("disconnect", () => {
       onlineUsers.delete(socket.id);
+      const userSocketsSet = userSockets.get(userId);
+      if (userSocketsSet) {
+        userSocketsSet.delete(socket.id);
+        if (userSocketsSet.size === 0) {
+          userSockets.delete(userId);
+        }
+      }
       io.emit("online_users", getOnlineList());
     });
   });
@@ -526,13 +796,14 @@ module.exports = (io) => {
   function getOnlineList() {
     const seen = new Set();
     const list = [];
-    for (const { userId, username, isAdmin, customStatus, avatar } of onlineUsers.values()) {
+    for (const { userId, username, isAdmin, role, customStatus, avatar } of onlineUsers.values()) {
       if (!seen.has(userId)) {
         seen.add(userId);
         list.push({
           userId,
           username,
           isAdmin: !!isAdmin,
+          role: role || "user",
           customStatus: customStatus || "Exploring the community ✨",
           avatar: avatar || null,
         });

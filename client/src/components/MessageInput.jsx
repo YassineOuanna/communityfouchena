@@ -11,6 +11,8 @@ export default function MessageInput({
   editingMessage,
   onCancelEdit,
   onSaveEdit,
+  isMuted = false,
+  muteInfo = null,
 }) {
   const { isDark } = useTheme();
   const [text, setText] = useState("");
@@ -51,6 +53,7 @@ export default function MessageInput({
   };
 
   const handleChange = (e) => {
+    if (isMuted) return;
     setText(e.target.value);
     adjustHeight();
     onTyping(true);
@@ -59,6 +62,7 @@ export default function MessageInput({
   };
 
   const handleSend = useCallback(() => {
+    if (isMuted) return;
     const trimmed = text.trim();
     if (!trimmed && !attachmentPreview) return;
 
@@ -82,7 +86,7 @@ export default function MessageInput({
       textareaRef.current.style.height = "auto";
       textareaRef.current.focus();
     }
-  }, [text, attachmentPreview, editingMessage, onSaveEdit, onSend, onTyping]);
+  }, [isMuted, text, attachmentPreview, editingMessage, onSaveEdit, onSend, onTyping]);
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -92,6 +96,7 @@ export default function MessageInput({
   };
 
   const onEmojiClick = (emojiData) => {
+    if (isMuted) return;
     setText((prev) => prev + emojiData.emoji);
     adjustHeight();
     textareaRef.current?.focus();
@@ -99,6 +104,7 @@ export default function MessageInput({
 
   // Image Upload Handler
   const handleImageSelect = (e) => {
+    if (isMuted) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -118,6 +124,7 @@ export default function MessageInput({
 
   // File Upload Handler
   const handleFileSelect = (e) => {
+    if (isMuted) return;
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -137,6 +144,7 @@ export default function MessageInput({
 
   // Voice Note Recording
   const startRecording = async () => {
+    if (isMuted) return;
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         alert("Voice recording is not supported in this browser.");
@@ -193,6 +201,15 @@ export default function MessageInput({
     }
   };
 
+  const formatRemaining = (seconds) => {
+    if (seconds == null || seconds < 0) return "Permanent";
+    if (seconds === 0) return "Expiring...";
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  };
+
   return (
     <div className="relative px-3 sm:px-4 py-2.5 bg-slate-900/40 border-t border-white/10 backdrop-blur-xl safe-pb select-none">
       {/* Hidden file inputs */}
@@ -212,7 +229,7 @@ export default function MessageInput({
 
       {/* Floating Emoji Picker */}
       <AnimatePresence>
-        {showEmoji && (
+        {showEmoji && !isMuted && (
           <>
             <div className="fixed inset-0 z-30" onClick={() => setShowEmoji(false)} />
             <motion.div
@@ -235,7 +252,7 @@ export default function MessageInput({
       </AnimatePresence>
 
       {/* Replying Banner */}
-      {replyingTo && (
+      {replyingTo && !isMuted && (
         <div className="mb-2 px-3 py-1.5 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-between text-xs text-indigo-200">
           <div className="flex items-center gap-2 truncate">
             <span className="font-bold">Replying to @{replyingTo.senderName}:</span>
@@ -252,7 +269,7 @@ export default function MessageInput({
       )}
 
       {/* Editing Banner */}
-      {editingMessage && (
+      {editingMessage && !isMuted && (
         <div className="mb-2 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-between text-xs text-amber-200">
           <div className="flex items-center gap-2">
             <span className="font-bold">Editing message:</span>
@@ -269,7 +286,7 @@ export default function MessageInput({
       )}
 
       {/* Attachment Preview Chip */}
-      {attachmentPreview && (
+      {attachmentPreview && !isMuted && (
         <div className="mb-2 p-2 rounded-xl bg-white/[0.05] border border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             {attachmentPreview.fileType === "image" ? (
@@ -334,6 +351,34 @@ export default function MessageInput({
             >
               Attach Audio
             </button>
+          </div>
+        </div>
+      ) : isMuted ? (
+        /* ========================================================
+           MUTED STATE: Prominently Disabled Input with Countdown
+           ======================================================== */
+        <div className="p-3.5 rounded-2xl bg-rose-950/30 border border-rose-500/40 backdrop-blur-xl flex items-center justify-between gap-3 text-rose-200">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-base flex-shrink-0">
+              🔇
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-rose-300 tracking-wide uppercase">
+                  You are muted in this channel
+                </span>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-extrabold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  {formatRemaining(muteInfo?.remainingSeconds)}
+                </span>
+              </div>
+              <p className="text-[11px] text-rose-300/80 truncate mt-0.5">
+                Reason: {muteInfo?.reason || "Restricted by moderator"}
+              </p>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-rose-400 font-medium px-2 py-1 rounded-lg bg-black/30 border border-rose-500/20 flex-shrink-0">
+            Posting Disabled
           </div>
         </div>
       ) : (

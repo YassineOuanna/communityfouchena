@@ -11,13 +11,16 @@ const roomSchema = new mongoose.Schema({
     {
       userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       username: String,
+      reason: { type: String, default: "Violation of channel rules" },
       bannedAt: { type: Date, default: Date.now },
+      until: { type: Date, default: null }, // null = permanent
     },
   ],
   kickedUsers: [
     {
       userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       username: String,
+      reason: { type: String, default: "Removed from channel" },
       kickedAt: { type: Date, default: Date.now },
     },
   ],
@@ -25,7 +28,8 @@ const roomSchema = new mongoose.Schema({
     {
       userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
       username: String,
-      until: { type: Date, default: null }, // null means permanent
+      reason: { type: String, default: "Muted by moderator" },
+      until: { type: Date, default: null }, // null = permanent
       mutedAt: { type: Date, default: Date.now },
     },
   ],

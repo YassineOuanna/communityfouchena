@@ -19,7 +19,7 @@ export default function ChatWindow({
   onSelectDM,
 }) {
   const { socket } = useSocket();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [messages, setMessages] = useState([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [typers, setTypers] = useState([]);
@@ -27,9 +27,21 @@ export default function ChatWindow({
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [showMemberList, setShowMemberList] = useState(false);
-  const [activeCall, setActiveCall] = useState(null); // { type: 'voice'|'video', target }
+  const [activeCall, setActiveCall] = useState(null);
   const [searchInChat, setSearchInChat] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+
+  // Central Restrictions state for this user in this room
+  const [restrictions, setRestrictions] = useState({
+    isMuted: false,
+    effectiveMuteReason: "",
+    effectiveMutedUntil: null,
+    effectiveMuteRemainingSeconds: 0,
+    isRoomBanned: false,
+    isKicked: false,
+  });
+  const [muteCountdown, setMuteCountdown] = useState(0);
+
   const bottomRef = useRef(null);
 
   const currentUserId = user?.id || user?._id || "";
@@ -47,7 +59,7 @@ export default function ChatWindow({
     return true;
   }, []);
 
-  // Fetch Message History
+  // Fetch Message History & Active Restrictions (Requirement F: Restored on refresh)
   useEffect(() => {
     setMessages([]);
     setTypers([]);
@@ -55,8 +67,23 @@ export default function ChatWindow({
     setEditingMessage(null);
     setIsLoadingMessages(true);
 
-    const fetchHistory = async () => {
+    const fetchHistoryAndRestrictions = async () => {
       try {
+        // Fetch active restrictions first
+        const restRes = await api.get(`/auth/restrictions?room=${currentRoom}`);
+        if (restRes.data) {
+          setRestrictions(restRes.data);
+          const secs = restRes.data.effectiveMuteRemainingSeconds;
+          setMuteCountdown(secs > 0 ? secs : 0);
+
+          if (!restRes.data.canAccessRoom) {
+            alert(restRes.data.accessBlockReason || "Access restricted");
+            onRoomBlocked && onRoomBlocked(currentRoom);
+            return;
+          }
+        }
+
+        // Fetch messages
         let res;
         if (activeDM) {
           res = await api.get(`/rooms/dm/${activeDM.userId}`);
@@ -64,17 +91,45 @@ export default function ChatWindow({
           res = await api.get(`/rooms/${currentRoom}/messages`);
         }
         setMessages(res.data || []);
+
         if (socket && isTabActiveAndVisible()) {
           socket.emit("mark_seen", { room: currentRoom });
         }
       } catch (err) {
-        console.error("Error fetching messages:", err);
+        if (err.response?.status === 403) {
+          const errMsg = err.response.data?.message || "You are not permitted to access this room.";
+          alert(errMsg);
+          onRoomBlocked && onRoomBlocked(currentRoom);
+        }
       } finally {
         setIsLoadingMessages(false);
       }
     };
-    fetchHistory();
-  }, [currentRoom, socket, activeDM, isTabActiveAndVisible]);
+
+    fetchHistoryAndRestrictions();
+  }, [currentRoom, socket, activeDM, isTabActiveAndVisible, onRoomBlocked]);
+
+  // Live Mute Countdown Timer
+  useEffect(() => {
+    if (muteCountdown <= 0) return;
+    const interval = setInterval(() => {
+      setMuteCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          // Refetch fresh restriction state from server
+          api.get(`/auth/restrictions?room=${currentRoom}`).then((res) => {
+            if (res.data) {
+              setRestrictions(res.data);
+              setMuteCountdown(res.data.effectiveMuteRemainingSeconds > 0 ? res.data.effectiveMuteRemainingSeconds : 0);
+            }
+          }).catch(() => {});
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [muteCountdown, currentRoom]);
 
   // Window Focus & Seen Tracking
   useEffect(() => {
@@ -100,6 +155,56 @@ export default function ChatWindow({
   useEffect(() => {
     if (!socket) return;
     socket.emit("join_room", { room: currentRoom });
+
+    const onRestrictionsState = (newRest) => {
+      setRestrictions(newRest);
+      if (newRest.effectiveMuteRemainingSeconds > 0) {
+        setMuteCountdown(newRest.effectiveMuteRemainingSeconds);
+      } else if (!newRest.isMuted) {
+        setMuteCountdown(0);
+      }
+    };
+
+    const onUserMuted = (data) => {
+      if (data.room === currentRoom || !data.room) {
+        setRestrictions((prev) => ({
+          ...prev,
+          isMuted: true,
+          effectiveMuteReason: data.reason,
+          effectiveMutedUntil: data.until,
+        }));
+        const secs = data.durationMinutes ? data.durationMinutes * 60 : -1;
+        setMuteCountdown(secs);
+        setNotice(`⚠️ ${data.message}`);
+      }
+    };
+
+    const onUserUnmuted = (data) => {
+      if (data.room === currentRoom || !data.room) {
+        setRestrictions((prev) => ({
+          ...prev,
+          isMuted: false,
+          effectiveMuteReason: "",
+          effectiveMutedUntil: null,
+          effectiveMuteRemainingSeconds: 0,
+        }));
+        setMuteCountdown(0);
+        setNotice("✅ You have been unmuted. You can chat now!");
+      }
+    };
+
+    const onMutedError = (data) => {
+      setNotice(data.message || `You are muted: ${data.reason}`);
+      setRestrictions((prev) => ({
+        ...prev,
+        isMuted: true,
+        effectiveMuteReason: data.reason,
+        effectiveMutedUntil: data.until,
+      }));
+      if (data.remainingSeconds > 0) {
+        setMuteCountdown(data.remainingSeconds);
+      }
+    };
 
     const onNewMsg = (msg) => {
       setMessages((prev) => {
@@ -180,11 +285,19 @@ export default function ChatWindow({
       });
     };
 
+    // REQUIREMENT C: Kicked from room
     const onKicked = ({ room, message }) => {
-      if (room === currentRoom) {
-        alert(message || "You have been kicked from this room.");
+      if (room === currentRoom || !room) {
+        alert(message || "You have been removed from this channel.");
         onRoomBlocked && onRoomBlocked(room);
       }
+    };
+
+    // REQUIREMENT D: Banned globally
+    const onBanned = ({ message, reason }) => {
+      alert(`Blacklisted: ${reason || message || "Your account has been blacklisted."}`);
+      logout();
+      window.location.href = "/auth";
     };
 
     const onNotice = ({ message }) => {
@@ -192,6 +305,10 @@ export default function ChatWindow({
       setTimeout(() => setNotice(""), 6000);
     };
 
+    socket.on("restrictions_state", onRestrictionsState);
+    socket.on("user_muted", onUserMuted);
+    socket.on("user_unmuted", onUserUnmuted);
+    socket.on("muted_error", onMutedError);
     socket.on("new_message", onNewMsg);
     socket.on("new_dm", onNewDM);
     socket.on("message_edited", onMsgEdited);
@@ -201,11 +318,16 @@ export default function ChatWindow({
     socket.on("user_typing", onTyping);
     socket.on("incoming_call", onIncomingCall);
     socket.on("kicked_from_room", onKicked);
+    socket.on("banned", onBanned);
     socket.on("moderation_notice", onNotice);
     socket.on("moderation_alert", onNotice);
     socket.on("error", onNotice);
 
     return () => {
+      socket.off("restrictions_state", onRestrictionsState);
+      socket.off("user_muted", onUserMuted);
+      socket.off("user_unmuted", onUserUnmuted);
+      socket.off("muted_error", onMutedError);
       socket.off("new_message", onNewMsg);
       socket.off("new_dm", onNewDM);
       socket.off("message_edited", onMsgEdited);
@@ -215,11 +337,12 @@ export default function ChatWindow({
       socket.off("user_typing", onTyping);
       socket.off("incoming_call", onIncomingCall);
       socket.off("kicked_from_room", onKicked);
+      socket.off("banned", onBanned);
       socket.off("moderation_notice", onNotice);
       socket.off("moderation_alert", onNotice);
       socket.off("error", onNotice);
     };
-  }, [socket, currentRoom, currentUsername, isTabActiveAndVisible]);
+  }, [socket, currentRoom, currentUsername, isTabActiveAndVisible, onRoomBlocked, logout]);
 
   // Auto-scroll
   useEffect(() => {
@@ -230,6 +353,11 @@ export default function ChatWindow({
   const handleSend = useCallback(
     ({ content, attachment }) => {
       if (!socket) return;
+      if (restrictions.isMuted) {
+        setNotice(`Cannot send: You are muted. (${restrictions.effectiveMuteReason})`);
+        return;
+      }
+
       const replyData = replyingTo
         ? {
             messageId: replyingTo._id,
@@ -256,19 +384,24 @@ export default function ChatWindow({
       }
       setReplyingTo(null);
     },
-    [socket, activeDM, currentRoom, replyingTo]
+    [socket, activeDM, currentRoom, replyingTo, restrictions]
   );
 
   const handleTyping = useCallback(
     (isTyping) => {
+      if (restrictions.isMuted) return;
       socket?.emit("typing", { room: currentRoom, isTyping });
     },
-    [socket, currentRoom]
+    [socket, currentRoom, restrictions]
   );
 
   // Edit Message
   const handleSaveEdit = (messageId, newContent) => {
     if (!socket || !newContent.trim()) return;
+    if (restrictions.isMuted) {
+      setNotice("Cannot edit messages while muted.");
+      return;
+    }
     socket.emit("edit_message", { messageId, newContent, room: currentRoom });
     setEditingMessage(null);
   };
@@ -282,6 +415,10 @@ export default function ChatWindow({
   // React to Message
   const handleReact = (messageId, emoji) => {
     if (!socket) return;
+    if (restrictions.isMuted) {
+      setNotice("Cannot react while muted.");
+      return;
+    }
     socket.emit("react_message", { messageId, emoji, room: currentRoom });
   };
 
@@ -332,6 +469,12 @@ export default function ChatWindow({
                 {activeDM && (
                   <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] flex-shrink-0" title="Online" />
                 )}
+                {restrictions.isMuted && (
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
+                    <span>🔇</span>
+                    <span>Muted</span>
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
                 {subtitle}
@@ -360,12 +503,16 @@ export default function ChatWindow({
             {/* Voice Call Button */}
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
+                if (restrictions.isMuted) {
+                  setNotice("Cannot start calls while muted.");
+                  return;
+                }
                 setActiveCall({
                   type: "voice",
                   target: activeDM || { username: activeRoom?.name || "Global Room" },
-                })
-              }
+                });
+              }}
               className="p-2 rounded-xl text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
               title="Start Voice Call"
             >
@@ -377,12 +524,16 @@ export default function ChatWindow({
             {/* Video Call Button */}
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
+                if (restrictions.isMuted) {
+                  setNotice("Cannot start video calls while muted.");
+                  return;
+                }
                 setActiveCall({
                   type: "video",
                   target: activeDM || { username: activeRoom?.name || "Global Room" },
-                })
-              }
+                });
+              }}
               className="p-2 rounded-xl text-[var(--text-muted)] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
               title="Start Video Call"
             >
@@ -450,7 +601,7 @@ export default function ChatWindow({
               exit={{ opacity: 0, height: 0 }}
               className="bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-200 flex justify-between items-center z-10 font-medium"
             >
-              <span>⚠️ {notice}</span>
+              <span>{notice}</span>
               <button
                 type="button"
                 onClick={() => setNotice("")}
@@ -464,7 +615,7 @@ export default function ChatWindow({
 
         {/* Message Stream */}
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-0.5">
-          {/* Skeleton Loaders While Loading History */}
+          {/* Skeleton Loaders */}
           {isLoadingMessages && (
             <div className="space-y-4 py-6">
               {[1, 2, 3, 4].map((i) => (
@@ -499,19 +650,17 @@ export default function ChatWindow({
             </div>
           )}
 
-          {/* Render Messages with Consecutive Grouping */}
+          {/* Render Messages */}
           {!isLoadingMessages &&
             displayMessages.map((msg, index) => {
               const isOwn = msg.senderName === currentUsername;
 
-              // Check if consecutive from same sender within 2 minutes
               const prevMsg = index > 0 ? displayMessages[index - 1] : null;
               const isConsecutive =
                 prevMsg &&
                 prevMsg.senderName === msg.senderName &&
                 new Date(msg.createdAt) - new Date(prevMsg.createdAt) < 2 * 60 * 1000;
 
-              // Seen receipts for the last message
               const isLastMessage = index === displayMessages.length - 1;
               const activeSeenBy = [];
               if (isLastMessage && Array.isArray(msg.seenBy)) {
@@ -546,7 +695,7 @@ export default function ChatWindow({
           <div ref={bottomRef} />
         </div>
 
-        {/* Pinned Input Dock */}
+        {/* Pinned Input Dock (Disabled when Muted) */}
         <div className="flex-shrink-0">
           <MessageInput
             onSend={handleSend}
@@ -556,6 +705,11 @@ export default function ChatWindow({
             editingMessage={editingMessage}
             onCancelEdit={() => setEditingMessage(null)}
             onSaveEdit={handleSaveEdit}
+            isMuted={restrictions.isMuted}
+            muteInfo={{
+              reason: restrictions.effectiveMuteReason,
+              remainingSeconds: muteCountdown,
+            }}
           />
         </div>
       </div>
