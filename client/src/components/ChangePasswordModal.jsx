@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import api from "../utils/api";
+import { KeyIcon, XIcon, LockIcon } from "./Icons";
 
 export default function ChangePasswordModal({ onClose }) {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -54,12 +55,12 @@ export default function ChangePasswordModal({ onClose }) {
           onClick={onClose}
           className="absolute top-4 right-4 text-slate-400 hover:text-white text-sm"
         >
-          ✕
+          <XIcon className="w-4 h-4" />
         </button>
 
         <div className="flex items-center gap-2 mb-4">
           <div className="w-8 h-8 rounded-xl bg-indigo-600/30 text-indigo-300 flex items-center justify-center text-sm font-bold">
-            🔑
+            <KeyIcon className="w-4 h-4 text-indigo-300" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-white">Change Password</h3>

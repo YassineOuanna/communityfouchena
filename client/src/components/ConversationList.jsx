@@ -1,5 +1,14 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  HashIcon,
+  MessagesSquareIcon,
+  UsersIcon,
+  SearchIcon,
+  PlusIcon,
+  XIcon,
+  LockIcon,
+} from "./Icons";
 
 function getAvatarGradient(name = "") {
   const gradients = [
@@ -120,18 +129,14 @@ export default function ConversationList({
           className="w-8 h-8 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 text-white flex items-center justify-center shadow-sm border border-indigo-400/30 active:scale-95 transition-all"
           title="Create New Channel"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
+          <PlusIcon className="w-4 h-4" />
         </button>
       </div>
 
       {/* Search Bar Across Conversations & Messages */}
       <div className="px-3 pb-2.5 flex-shrink-0">
         <div className="relative flex items-center">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 absolute left-3 text-[var(--text-muted)] pointer-events-none">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
+          <SearchIcon className="w-4 h-4 absolute left-3 text-[var(--text-muted)] pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
@@ -143,32 +148,33 @@ export default function ConversationList({
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 text-xs text-[var(--text-muted)] hover:text-white"
+              className="absolute right-2.5 w-4 h-4 flex items-center justify-center text-xs text-[var(--text-muted)] hover:text-white"
             >
-              ✕
+              <XIcon className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Filter Chips */}
+      {/* Filter Chips with Icons */}
       <div className="px-3 pb-2 flex items-center gap-1.5 flex-shrink-0 overflow-x-auto no-scrollbar">
         {[
-          { id: "all", label: "All" },
-          { id: "channels", label: "Channels" },
-          { id: "dms", label: "Direct Messages" },
+          { id: "all", label: "All", icon: <MessagesSquareIcon className="w-3.5 h-3.5" /> },
+          { id: "channels", label: "Channels", icon: <HashIcon className="w-3.5 h-3.5" /> },
+          { id: "dms", label: "DMs", icon: <UsersIcon className="w-3.5 h-3.5" /> },
         ].map((f) => (
           <button
             key={f.id}
             type="button"
             onClick={() => onFilterChange && onFilterChange(f.id)}
-            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 ${
               activeFilter === f.id
                 ? "bg-indigo-600 text-white shadow-sm"
                 : "bg-white/[0.04] text-[var(--text-muted)] hover:bg-white/[0.08] hover:text-[var(--text-main)]"
             }`}
           >
-            {f.label}
+            {f.icon}
+            <span>{f.label}</span>
           </button>
         ))}
       </div>
@@ -224,7 +230,11 @@ export default function ConversationList({
                               : "bg-white/[0.06] border border-white/10 text-indigo-400"
                           }`}
                         >
-                          #
+                          {room.isPrivate ? (
+                            <LockIcon className="w-4 h-4 text-amber-300" />
+                          ) : (
+                            <HashIcon className="w-4 h-4" />
+                          )}
                         </div>
 
                         <div className="min-w-0 flex-1">

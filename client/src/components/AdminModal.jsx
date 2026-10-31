@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../utils/api";
+import {
+  ShieldAlertIcon,
+  XIcon,
+  SparklesIcon,
+  UsersIcon,
+  MessageSquareIcon,
+  TrashIcon,
+} from "./Icons";
 
 export default function AdminModal({ onClose }) {
   const [tab, setTab] = useState("overview"); // "overview" | "users" | "messages"
@@ -91,7 +99,7 @@ export default function AdminModal({ onClose }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-white/[0.03]">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white text-sm shadow-md">
-              👑
+              <ShieldAlertIcon className="w-4 h-4" />
             </div>
             <div>
               <h3 className="font-bold text-white text-base leading-tight">
@@ -108,7 +116,7 @@ export default function AdminModal({ onClose }) {
             onClick={onClose}
             className="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/15 text-slate-300 hover:text-white flex items-center justify-center transition-colors"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -117,35 +125,38 @@ export default function AdminModal({ onClose }) {
           <button
             type="button"
             onClick={() => setTab("overview")}
-            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
               tab === "overview"
                 ? "border-amber-400 text-amber-300"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            📊 Database Stats
+            <SparklesIcon className="w-3.5 h-3.5" />
+            <span>Database Stats</span>
           </button>
           <button
             type="button"
             onClick={() => setTab("users")}
-            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
               tab === "users"
                 ? "border-amber-400 text-amber-300"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            👥 Manage Users ({stats?.totalUsers ?? "..."})
+            <UsersIcon className="w-3.5 h-3.5" />
+            <span>Manage Users ({stats?.totalUsers ?? "..."})</span>
           </button>
           <button
             type="button"
             onClick={() => setTab("messages")}
-            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all ${
+            className={`pb-2.5 px-3 text-xs font-semibold border-b-2 transition-all flex items-center gap-1.5 ${
               tab === "messages"
                 ? "border-amber-400 text-amber-300"
                 : "border-transparent text-slate-400 hover:text-slate-200"
             }`}
           >
-            💬 Moderation ({stats?.totalMessages ?? "..."})
+            <MessageSquareIcon className="w-3.5 h-3.5" />
+            <span>Moderation ({stats?.totalMessages ?? "..."})</span>
           </button>
         </div>
 
@@ -153,7 +164,7 @@ export default function AdminModal({ onClose }) {
           <div className="mx-6 mt-3 px-3 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs flex justify-between items-center">
             <span>{alert}</span>
             <button type="button" onClick={() => setAlert("")} className="hover:text-white font-bold">
-              ✕
+              <XIcon className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
@@ -262,9 +273,10 @@ export default function AdminModal({ onClose }) {
                         <button
                           type="button"
                           onClick={() => handleDeleteUser(u._id, u.username)}
-                          className="px-2.5 py-1 text-[11px] font-semibold text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg transition-colors"
+                          className="px-2.5 py-1 text-[11px] font-semibold text-rose-300 hover:text-white bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 rounded-lg transition-colors flex items-center gap-1"
                         >
-                          Delete User
+                          <TrashIcon className="w-3 h-3" />
+                          <span>Delete User</span>
                         </button>
                       )}
                     </div>
@@ -302,10 +314,11 @@ export default function AdminModal({ onClose }) {
                       <button
                         type="button"
                         onClick={() => handleDeleteMessage(m._id)}
-                        className="px-2 py-1 text-[10px] text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20"
+                        className="px-2 py-1 text-[10px] text-rose-400 hover:text-white hover:bg-rose-500/20 rounded-lg transition-colors border border-rose-500/20 flex items-center gap-1"
                         title="Delete message"
                       >
-                        Delete
+                        <TrashIcon className="w-3 h-3" />
+                        <span>Delete</span>
                       </button>
                     </div>
                   ))}

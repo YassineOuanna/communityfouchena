@@ -1,4 +1,5 @@
 import React from "react";
+import { MoreVerticalIcon } from "./Icons";
 
 export default function UserItem({ user, currentUserId, onClick, isSelected, onContextMenu }) {
   if (!user) return null;
@@ -79,7 +80,7 @@ export default function UserItem({ user, currentUserId, onClick, isSelected, onC
           className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white opacity-60 hover:opacity-100 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs cursor-pointer"
           title="User Options & Moderation"
         >
-          ⋮
+          <MoreVerticalIcon className="w-3.5 h-3.5" />
         </button>
       )}
     </div>

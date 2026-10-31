@@ -8,6 +8,16 @@ import MessageInput from "./MessageInput";
 import MemberListDrawer from "./MemberListDrawer";
 import CallScreenModal from "./CallScreenModal";
 import api from "../utils/api";
+import {
+  HashIcon,
+  SearchIcon,
+  PhoneCallIcon,
+  VideoIcon,
+  UsersIcon,
+  SparklesIcon,
+  XIcon,
+  VolumeXIcon,
+} from "./Icons";
 
 export default function ChatWindow({
   activeRoom,
@@ -477,7 +487,11 @@ export default function ChatWindow({
             )}
 
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 border border-white/20 flex items-center justify-center text-sm font-bold text-white shadow-sm flex-shrink-0">
-              {activeDM ? activeDM.username?.[0]?.toUpperCase() : "#"}
+              {activeDM ? (
+                activeDM.username?.[0]?.toUpperCase()
+              ) : (
+                <HashIcon className="w-5 h-5" />
+              )}
             </div>
 
             <div className="min-w-0">
@@ -490,7 +504,7 @@ export default function ChatWindow({
                 )}
                 {restrictions.isMuted && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1">
-                    <span>🔇</span>
+                    <VolumeXIcon className="w-3 h-3" />
                     <span>Muted</span>
                   </span>
                 )}
@@ -514,9 +528,7 @@ export default function ChatWindow({
               }`}
               title="Search in this chat"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-              </svg>
+              <SearchIcon className="w-4 h-4" />
             </button>
 
             {/* Voice Call Button */}
@@ -535,9 +547,7 @@ export default function ChatWindow({
               className="p-2 rounded-xl text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
               title="Start Voice Call"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
-              </svg>
+              <PhoneCallIcon className="w-4 h-4" />
             </button>
 
             {/* Video Call Button */}
@@ -556,9 +566,7 @@ export default function ChatWindow({
               className="p-2 rounded-xl text-[var(--text-muted)] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
               title="Start Video Call"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
-              </svg>
+              <VideoIcon className="w-4 h-4" />
             </button>
 
             {/* Member List Toggle (For Channels) */}
@@ -573,9 +581,7 @@ export default function ChatWindow({
                 }`}
                 title="Toggle Room Members"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.999-3.199a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
-                </svg>
+                <UsersIcon className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -654,11 +660,11 @@ export default function ChatWindow({
             </div>
           )}
 
-          {/* Friendly Empty State */}
+          {/* Friendly Empty State with Modern Icons */}
           {!isLoadingMessages && displayMessages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] py-12 select-none">
               <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-3 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
-                <span className="text-2xl">👋</span>
+                <SparklesIcon className="w-8 h-8 text-indigo-400 animate-pulse" />
               </div>
               <p className="text-sm font-bold text-[var(--text-main)]">
                 No messages yet, say hi!

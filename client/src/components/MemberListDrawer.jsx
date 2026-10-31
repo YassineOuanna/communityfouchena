@@ -2,6 +2,12 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
+import {
+  MoreVerticalIcon,
+  XIcon,
+  ShieldAlertIcon,
+  UsersIcon,
+} from "./Icons";
 
 // Color gradient generator based on name
 function getAvatarGradient(name = "") {
@@ -98,10 +104,10 @@ export default function MemberListDrawer({
               e.stopPropagation();
               onUserContextMenu && onUserContextMenu(e, u, activeRoom?.name);
             }}
-            className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-all text-xs"
+            className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-white/10 transition-all text-xs"
             title="Moderation & options"
           >
-            ⋮
+            <MoreVerticalIcon className="w-3.5 h-3.5" />
           </button>
         )}
       </div>
@@ -129,10 +135,10 @@ export default function MemberListDrawer({
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors"
+          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors"
           title="Close member list"
         >
-          ✕
+          <XIcon className="w-4 h-4" />
         </button>
       </div>
 
@@ -142,7 +148,8 @@ export default function MemberListDrawer({
         {admins.length > 0 && (
           <div>
             <div className="px-2 pb-1.5 text-[11px] font-bold text-amber-400/90 uppercase tracking-wider flex items-center gap-1.5">
-              <span>👑 Administrators</span>
+              <ShieldAlertIcon className="w-3.5 h-3.5 text-amber-400" />
+              <span>Administrators</span>
               <span className="text-[10px] text-[var(--text-muted)] font-normal">
                 ({admins.length})
               </span>
@@ -154,6 +161,7 @@ export default function MemberListDrawer({
         {/* Regular Members Group */}
         <div>
           <div className="px-2 pb-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <UsersIcon className="w-3.5 h-3.5 text-slate-400" />
             <span>Online Members</span>
             <span className="text-[10px] text-[var(--text-muted)] font-normal">
               ({regularMembers.length})

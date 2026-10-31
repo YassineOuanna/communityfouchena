@@ -1,5 +1,16 @@
 import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  CheckIcon,
+  CheckCheckIcon,
+  PlayIcon,
+  PauseIcon,
+  ReplyIcon,
+  EditIcon,
+  TrashIcon,
+  FileTextIcon,
+  XIcon,
+} from "./Icons";
 
 function getAvatarGradient(name = "") {
   const gradients = [
@@ -180,7 +191,11 @@ export default function MessageBubble({
                 onClick={toggleAudio}
                 className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center flex-shrink-0 transition-transform active:scale-95"
               >
-                {isPlayingAudio ? "⏸" : "▶"}
+                {isPlayingAudio ? (
+                  <PauseIcon className="w-4 h-4" />
+                ) : (
+                  <PlayIcon className="w-4 h-4 ml-0.5" />
+                )}
               </button>
 
               {/* Waveform graphic */}
@@ -209,7 +224,7 @@ export default function MessageBubble({
               download={msg.attachment.fileName}
               className="mb-2 p-2.5 rounded-xl bg-black/20 hover:bg-black/30 flex items-center gap-2.5 text-xs text-white transition-colors"
             >
-              <span className="text-base">📎</span>
+              <FileTextIcon className="w-5 h-5 text-indigo-300 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="font-semibold truncate">{msg.attachment.fileName}</p>
                 <p className="text-[10px] text-white/70">
@@ -256,10 +271,10 @@ export default function MessageBubble({
             <button
               type="button"
               onClick={() => onReply && onReply(msg)}
-              className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white transition-colors text-xs"
+              className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
               title="Reply to message"
             >
-              ↩
+              <ReplyIcon className="w-3.5 h-3.5" />
             </button>
 
             {/* Edit Button (if own) */}
@@ -267,10 +282,10 @@ export default function MessageBubble({
               <button
                 type="button"
                 onClick={() => onEdit(msg)}
-                className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white transition-colors text-xs"
+                className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                 title="Edit message"
               >
-                ✎
+                <EditIcon className="w-3.5 h-3.5" />
               </button>
             )}
 
@@ -279,10 +294,10 @@ export default function MessageBubble({
               <button
                 type="button"
                 onClick={() => onDelete(msg._id)}
-                className="w-6 h-6 flex items-center justify-center text-rose-400 hover:text-rose-300 transition-colors text-xs"
+                className="w-6 h-6 flex items-center justify-center text-rose-400 hover:text-rose-300 transition-colors"
                 title="Delete message"
               >
-                🗑
+                <TrashIcon className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -330,13 +345,14 @@ export default function MessageBubble({
 
         {/* Read Receipt & Delivery Status for Own Messages */}
         {isOwn && (
-          <span className="text-[11px] font-medium ml-0.5" title={seenBy?.length > 0 ? "Seen" : "Delivered"}>
+          <span className="inline-flex items-center ml-0.5" title={seenBy?.length > 0 ? "Seen" : "Delivered"}>
             {seenBy && seenBy.length > 0 ? (
-              <span className="text-cyan-400 font-bold" title={`Seen by ${seenBy.map((s) => s.username).join(", ")}`}>
-                ✓✓
-              </span>
+              <CheckCheckIcon
+                className="w-3.5 h-3.5 text-cyan-400"
+                title={`Seen by ${seenBy.map((s) => s.username).join(", ")}`}
+              />
             ) : (
-              <span className="text-[var(--text-muted)]">✓✓</span>
+              <CheckCheckIcon className="w-3.5 h-3.5 text-[var(--text-muted)] opacity-70" />
             )}
           </span>
         )}
@@ -365,7 +381,7 @@ export default function MessageBubble({
                 onClick={() => setShowImageModal(false)}
                 className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/90"
               >
-                ✕
+                <XIcon className="w-4 h-4" />
               </button>
             </motion.div>
           </div>

@@ -15,6 +15,7 @@ import CallScreenModal from "../components/CallScreenModal";
 import NotificationToastContainer, { playNotificationChime } from "../components/NotificationToast";
 import api from "../utils/api";
 import { deduplicateRooms, DEFAULT_GLOBAL_ROOM } from "../utils/roomUtils";
+import { MessagesSquareIcon, HashIcon, PhoneCallIcon, UserIcon } from "../components/Icons";
 
 export default function ChatPage() {
   const { user, logout } = useAuth();
@@ -334,21 +335,21 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setRailView("all")}
-                  className={`flex flex-col items-center gap-1 text-xs ${
+                  className={`flex flex-col items-center gap-1 text-[11px] ${
                     railView === "all" ? "text-indigo-400 font-bold" : "text-slate-400"
                   }`}
                 >
-                  <span className="text-lg">💬</span>
+                  <MessagesSquareIcon className="w-5 h-5" />
                   <span>Chats</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setRailView("channels")}
-                  className={`flex flex-col items-center gap-1 text-xs ${
+                  className={`flex flex-col items-center gap-1 text-[11px] ${
                     railView === "channels" ? "text-indigo-400 font-bold" : "text-slate-400"
                   }`}
                 >
-                  <span className="text-lg">📢</span>
+                  <HashIcon className="w-5 h-5" />
                   <span>Rooms</span>
                 </button>
                 <button
@@ -359,17 +360,17 @@ export default function ChatPage() {
                       target: activeDM || { username: activeRoom?.name || "Global Chat" },
                     })
                   }
-                  className="flex flex-col items-center gap-1 text-xs text-slate-400 hover:text-white"
+                  className="flex flex-col items-center gap-1 text-[11px] text-slate-400 hover:text-white"
                 >
-                  <span className="text-lg">📞</span>
+                  <PhoneCallIcon className="w-5 h-5" />
                   <span>Call</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(true)}
-                  className="flex flex-col items-center gap-1 text-xs text-slate-400 hover:text-white"
+                  className="flex flex-col items-center gap-1 text-[11px] text-slate-400 hover:text-white"
                 >
-                  <span className="text-lg">👤</span>
+                  <UserIcon className="w-5 h-5" />
                   <span>Profile</span>
                 </button>
               </div>

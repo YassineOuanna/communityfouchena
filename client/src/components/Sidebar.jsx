@@ -10,6 +10,17 @@ import ChangePasswordModal from "./ChangePasswordModal";
 import AdBanner, { AD_CONFIG } from "./AdBanner";
 import api from "../utils/api";
 import { deduplicateRooms, DEFAULT_GLOBAL_ROOM } from "../utils/roomUtils";
+import {
+  HashIcon,
+  UsersIcon,
+  PlusIcon,
+  KeyIcon,
+  ShieldAlertIcon,
+  LogOutIcon,
+  SunIcon,
+  MoonIcon,
+  PaletteIcon,
+} from "./Icons";
 
 export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM, onLogout, onUserContextMenu }) {
   const { onlineUsers = [], isConnected = false } = useSocket() || {};
@@ -77,9 +88,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                 transition={{ type: "spring", stiffness: 450, damping: 35 }}
               />
             )}
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 relative z-10">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h13.5m-13.5 7.5h13.5m-1.5-12l-3 16.5m-6-16.5l-3 16.5" />
-            </svg>
+            <HashIcon className="w-3.5 h-3.5 relative z-10" />
             <span className="relative z-10">Channels ({rooms?.length || 0})</span>
           </button>
 
@@ -97,9 +106,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                 transition={{ type: "spring", stiffness: 450, damping: 35 }}
               />
             )}
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 relative z-10">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-            </svg>
+            <UsersIcon className="w-3.5 h-3.5 relative z-10" />
             <span className="relative z-10">Online ({onlineUsers?.length || 0})</span>
           </button>
         </div>
@@ -125,9 +132,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                   className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
                   title="Create Channel"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
+                  <PlusIcon className="w-3.5 h-3.5" />
                 </button>
               </div>
 
@@ -144,10 +149,10 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                         : "text-slate-300 hover:text-white hover:bg-white/[0.06] border border-transparent"
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       isSelected ? "bg-white/20 text-white" : "bg-white/[0.06] border border-white/10 text-slate-400"
                     }`}>
-                      #
+                      <HashIcon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className={`text-xs truncate ${isSelected ? "text-white font-semibold" : "text-slate-200"}`}>
@@ -216,7 +221,11 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                   : "bg-gradient-to-tr from-indigo-500 to-cyan-500 border-white/20"
               }`}
             >
-              {user?.isAdmin ? "👑" : user?.username?.[0]?.toUpperCase()}
+              {user?.isAdmin ? (
+                <ShieldAlertIcon className="w-4 h-4 text-white" />
+              ) : (
+                user?.username?.[0]?.toUpperCase()
+              )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
@@ -240,11 +249,17 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
             <button
               type="button"
               onClick={toggleTheme}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors text-xs"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors"
               title={`Switch Theme: ${theme}`}
               aria-label="Toggle theme appearance"
             >
-              {theme === "oled" ? "🖤" : theme === "slate" ? "🌑" : "🌌"}
+              {theme === "oled" ? (
+                <MoonIcon className="w-4 h-4" />
+              ) : theme === "slate" ? (
+                <SunIcon className="w-4 h-4" />
+              ) : (
+                <PaletteIcon className="w-4 h-4" />
+              )}
             </button>
 
             {/* Change Password Button */}
@@ -254,9 +269,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
               className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-300 hover:bg-white/10 transition-colors"
               title="Change Password"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
-              </svg>
+              <KeyIcon className="w-4 h-4" />
             </button>
 
             {user?.isAdmin && (
@@ -266,9 +279,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
                 className="p-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 hover:text-white transition-colors border border-amber-500/30"
                 title="Open Database Admin Panel"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
-                  <path fillRule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clipRule="evenodd" />
-                </svg>
+                <ShieldAlertIcon className="w-4 h-4" />
               </button>
             )}
 
@@ -278,9 +289,7 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
               className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
               title="Sign out"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
-              </svg>
+              <LogOutIcon className="w-4 h-4" />
             </button>
           </div>
         </div>

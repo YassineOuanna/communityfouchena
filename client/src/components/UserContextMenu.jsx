@@ -3,6 +3,17 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
+import {
+  MessageSquareIcon,
+  VolumeXIcon,
+  UserMinusIcon,
+  BanIcon,
+  ShieldAlertIcon,
+  UnlockIcon,
+  KeyIcon,
+  ChevronRightIcon,
+  CheckIcon,
+} from "./Icons";
 
 export default function UserContextMenu({
   target, // { x, y, user: { userId, username, isAdmin }, room }
@@ -210,7 +221,8 @@ export default function UserContextMenu({
             }}
             className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
           >
-            <span>💬</span> Send Direct Message
+            <MessageSquareIcon className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Send Direct Message</span>
           </button>
         )}
 
@@ -231,11 +243,10 @@ export default function UserContextMenu({
                 className="w-full text-left px-3 py-1.5 hover:bg-indigo-600/30 flex items-center justify-between text-slate-200 hover:text-white transition-colors group cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <span>🔇</span> Mute User
+                  <VolumeXIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Mute User</span>
                 </span>
-                <span className="text-[10px] text-slate-400 group-hover:text-white">
-                  ›
-                </span>
+                <ChevronRightIcon className="w-3 h-3 text-slate-400 group-hover:text-white" />
               </button>
 
               {/* Submenu: Mute Durations */}
@@ -258,30 +269,34 @@ export default function UserContextMenu({
                     <button
                       type="button"
                       onClick={() => handleMute(15)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white"
+                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center justify-between text-slate-200 hover:text-white"
                     >
-                      ⏱️ 15 Minutes
+                      <span>15 Minutes</span>
+                      <span className="text-[10px] text-slate-500">15m</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleMute(60)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white"
+                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center justify-between text-slate-200 hover:text-white"
                     >
-                      ⏳ 1 Hour
+                      <span>1 Hour</span>
+                      <span className="text-[10px] text-slate-500">1h</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleMute(1440)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white"
+                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center justify-between text-slate-200 hover:text-white"
                     >
-                      📅 24 Hours
+                      <span>24 Hours</span>
+                      <span className="text-[10px] text-slate-500">1d</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleMute(null)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 flex items-center gap-2 font-semibold"
+                      className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 flex items-center justify-between font-semibold"
                     >
-                      ♾️ Permanent Mute
+                      <span>Permanent Mute</span>
+                      <span className="text-[10px] text-rose-400">Perma</span>
                     </button>
                     <div className="my-1 border-t border-white/10" />
                     <button
@@ -289,7 +304,8 @@ export default function UserContextMenu({
                       onClick={handleUnmute}
                       className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2 font-semibold"
                     >
-                      🔊 Unmute User
+                      <CheckIcon className="w-3.5 h-3.5" />
+                      <span>Lift Channel Mute</span>
                     </button>
                   </motion.div>
                 )}
@@ -308,11 +324,10 @@ export default function UserContextMenu({
                 className="w-full text-left px-3 py-1.5 hover:bg-rose-600/20 flex items-center justify-between text-rose-300 hover:text-rose-100 transition-colors group cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <span>🚫</span> Blacklist / Ban
+                  <BanIcon className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Blacklist / Ban</span>
                 </span>
-                <span className="text-[10px] text-slate-400 group-hover:text-white">
-                  ›
-                </span>
+                <ChevronRightIcon className="w-3 h-3 text-slate-400 group-hover:text-white" />
               </button>
 
               {/* Submenu: Blacklist Scope */}
@@ -327,7 +342,7 @@ export default function UserContextMenu({
                       right: openSubmenuOnLeft ? "210px" : "auto",
                       top: 0,
                     }}
-                    className="absolute w-[200px] rounded-2xl bg-[#0f172a]/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-1 text-xs text-slate-200 z-50 select-none"
+                    className="absolute w-[210px] rounded-2xl bg-[#0f172a]/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-1 text-xs text-slate-200 z-50 select-none"
                   >
                     <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-white/10 mb-1">
                       Blacklist Target
@@ -339,14 +354,16 @@ export default function UserContextMenu({
                           onClick={handleBanRoom}
                           className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2"
                         >
-                          🚪 Blacklist from #{target.room}
+                          <BanIcon className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Blacklist from #{target.room}</span>
                         </button>
                         <button
                           type="button"
                           onClick={handleUnbanRoom}
                           className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-2"
                         >
-                          🔓 Remove #{target.room} Blacklist
+                          <UnlockIcon className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>Remove #{target.room} Blacklist</span>
                         </button>
                       </>
                     )}
@@ -357,14 +374,16 @@ export default function UserContextMenu({
                       onClick={handleGlobalBan}
                       className="w-full text-left px-3 py-1.5 hover:bg-rose-700/30 text-rose-400 hover:text-rose-200 flex items-center gap-2 font-bold"
                     >
-                      🌐 Blacklist Globally (All Rooms)
+                      <ShieldAlertIcon className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Blacklist Globally</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleUnbanGlobal}
                       className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2"
                     >
-                      🌍 Lift Global Blacklist
+                      <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Lift Global Blacklist</span>
                     </button>
                   </motion.div>
                 )}
@@ -379,7 +398,8 @@ export default function UserContextMenu({
                 className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2 transition-colors cursor-pointer"
                 title="User will be kicked and won't be able to see or rejoin this room"
               >
-                <span>👢</span> Kick from #{target.room}
+                <UserMinusIcon className="w-3.5 h-3.5 text-amber-400" />
+                <span>Kick from #{target.room}</span>
               </button>
             )}
 
@@ -390,7 +410,8 @@ export default function UserContextMenu({
               onClick={() => setShowPasswordPrompt(true)}
               className="w-full text-left px-3 py-1.5 hover:bg-amber-500/20 text-amber-300 hover:text-amber-100 flex items-center gap-2 transition-colors font-semibold cursor-pointer"
             >
-              <span>🔑</span> Reset User Password
+              <KeyIcon className="w-3.5 h-3.5 text-amber-400" />
+              <span>Reset User Password</span>
             </button>
           </>
         )}

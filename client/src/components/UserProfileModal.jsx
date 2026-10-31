@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
 import api from "../utils/api";
+import { UserIcon, XIcon, KeyIcon } from "./Icons";
 
 const PRESET_STATUSES = [
   { emoji: "⚡", text: "Building something awesome" },
@@ -66,6 +67,7 @@ export default function UserProfileModal({ onClose, onChangePassword }) {
 
         <div className="flex items-center justify-between pb-4 border-b border-white/10 relative z-10">
           <h2 className="text-base font-bold text-[var(--text-main)] flex items-center gap-2">
+            <UserIcon className="w-4 h-4 text-indigo-400" />
             <span>User Profile</span>
           </h2>
           <button
@@ -73,7 +75,7 @@ export default function UserProfileModal({ onClose, onChangePassword }) {
             onClick={onClose}
             className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -157,9 +159,10 @@ export default function UserProfileModal({ onClose, onChangePassword }) {
                   onClose();
                   onChangePassword();
                 }}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors mr-auto"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors mr-auto flex items-center gap-1.5"
               >
-                Change Password
+                <KeyIcon className="w-3.5 h-3.5" />
+                <span>Change Password</span>
               </button>
             )}
 

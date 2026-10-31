@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  MicIcon,
+  VolumeXIcon,
+  VideoIcon,
+  EyeOffIcon,
+  MonitorIcon,
+  LockIcon,
+} from "./Icons";
 
 export default function CallScreenModal({ target, type = "voice", onClose }) {
   const [isMuted, setIsMuted] = useState(false);
@@ -211,42 +219,42 @@ export default function CallScreenModal({ target, type = "voice", onClose }) {
           <button
             type="button"
             onClick={toggleMic}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all ${
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
               isMuted
                 ? "bg-rose-500 text-white shadow-[0_0_15px_rgba(244,63,94,0.4)]"
                 : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
             }`}
             title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
           >
-            {isMuted ? "🔇" : "🎙️"}
+            {isMuted ? <VolumeXIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
           </button>
 
           {/* Video Toggle Button */}
           <button
             type="button"
             onClick={toggleVideo}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all ${
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
               isVideoOff
                 ? "bg-white/10 text-slate-400 hover:bg-white/20 border border-white/10"
                 : "bg-indigo-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]"
             }`}
             title={isVideoOff ? "Turn Video On" : "Turn Video Off"}
           >
-            {isVideoOff ? "🚫" : "📹"}
+            {isVideoOff ? <EyeOffIcon className="w-5 h-5" /> : <VideoIcon className="w-5 h-5" />}
           </button>
 
           {/* Screen Share Button */}
           <button
             type="button"
             onClick={toggleScreenShare}
-            className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg transition-all ${
+            className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
               isScreenSharing
                 ? "bg-cyan-500 text-white shadow-[0_0_15px_rgba(6,182,212,0.4)]"
                 : "bg-white/10 text-white hover:bg-white/20 border border-white/10"
             }`}
             title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
           >
-            🖥️
+            <MonitorIcon className="w-5 h-5" />
           </button>
 
           {/* Red End Call Button */}

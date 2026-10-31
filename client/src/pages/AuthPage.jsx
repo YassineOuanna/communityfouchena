@@ -3,6 +3,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { useNavigate } from "react-router-dom";
+import {
+  SparklesIcon,
+  ShieldAlertIcon,
+  LockIcon,
+  HashIcon,
+  MessageSquareIcon,
+  SunIcon,
+  MoonIcon,
+  PaletteIcon,
+} from "../components/Icons";
 
 export default function AuthPage() {
   const [mode, setMode] = useState("login");
@@ -88,7 +98,15 @@ export default function AuthPage() {
               title={`Switch Theme (Current: ${theme})`}
               aria-label="Toggle theme appearance"
             >
-              <span>{theme === "oled" ? "🖤" : theme === "slate" ? "🌑" : "🌌"}</span>
+              {theme === "light" ? (
+                <SunIcon className="w-4 h-4 text-amber-400" />
+              ) : theme === "oled" ? (
+                <MoonIcon className="w-4 h-4 text-indigo-400" />
+              ) : theme === "slate" ? (
+                <PaletteIcon className="w-4 h-4 text-cyan-400" />
+              ) : (
+                <MoonIcon className="w-4 h-4 text-purple-400" />
+              )}
               <span className="hidden md:inline capitalize font-medium">{theme}</span>
             </button>
 
@@ -152,22 +170,31 @@ export default function AuthPage() {
 
             {/* Three Trust Pillars */}
             <div className="pt-6 grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-white/10">
-              <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-                <div className="text-indigo-400 text-base mb-1 font-bold">⚡ Instant WebSocket</div>
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10">
+                <div className="text-indigo-400 text-sm mb-1 font-bold flex items-center gap-1.5">
+                  <SparklesIcon className="w-4 h-4 text-indigo-400" />
+                  <span>Instant WebSocket</span>
+                </div>
                 <p className="text-[11.5px] text-slate-400 leading-normal">
                   Sub-second live delivery with seen receipts and real-time typing indicators.
                 </p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-                <div className="text-cyan-400 text-base mb-1 font-bold">🛡️ Moderation Controls</div>
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10">
+                <div className="text-cyan-400 text-sm mb-1 font-bold flex items-center gap-1.5">
+                  <ShieldAlertIcon className="w-4 h-4 text-cyan-400" />
+                  <span>Moderation Controls</span>
+                </div>
                 <p className="text-[11.5px] text-slate-400 leading-normal">
                   Right-click any user or message for timed mutes, room bans, and instant kicks.
                 </p>
               </div>
 
-              <div className="p-3 rounded-2xl bg-white/[0.03] border border-white/10">
-                <div className="text-emerald-400 text-base mb-1 font-bold">🔒 Privacy First</div>
+              <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10">
+                <div className="text-emerald-400 text-sm mb-1 font-bold flex items-center gap-1.5">
+                  <LockIcon className="w-4 h-4 text-emerald-400" />
+                  <span>Privacy First</span>
+                </div>
                 <p className="text-[11.5px] text-slate-400 leading-normal">
                   No SMS, no phone verification, and no invasive trackers. You own your identity.
                 </p>
@@ -320,8 +347,9 @@ export default function AuthPage() {
               </form>
 
               <div className="mt-5 pt-4 border-t border-white/10 text-center">
-                <p className="text-slate-400 text-[11px] leading-relaxed">
-                  🔒 No phone or identity verification. All accounts enjoy full anonymous freedom.
+                <p className="text-slate-400 text-[11px] leading-relaxed flex items-center justify-center gap-1.5">
+                  <LockIcon className="w-3.5 h-3.5 text-slate-400" />
+                  <span>No phone or identity verification. All accounts enjoy full anonymous freedom.</span>
                 </p>
               </div>
             </div>
@@ -342,8 +370,8 @@ export default function AuthPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Card 1 */}
             <div className="p-6 rounded-3xl bg-white/[0.03] border border-white/10 hover:border-indigo-400/40 hover:-translate-y-1 transition-all duration-200 backdrop-blur-xl group">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-lg mb-4 border border-indigo-500/30">
-                #
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center mb-4 border border-indigo-500/30">
+                <HashIcon className="w-5 h-5 text-indigo-300" />
               </div>
               <h4 className="font-heading font-bold text-base text-white mb-2 group-hover:text-indigo-300 transition-colors">
                 Public & Topic Channels
@@ -359,8 +387,8 @@ export default function AuthPage() {
 
             {/* Card 2 */}
             <div className="p-6 rounded-3xl bg-white/[0.03] border border-white/10 hover:border-cyan-400/40 hover:-translate-y-1 transition-all duration-200 backdrop-blur-xl group">
-              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold text-lg mb-4 border border-cyan-500/30">
-                💬
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mb-4 border border-cyan-500/30">
+                <MessageSquareIcon className="w-5 h-5 text-cyan-300" />
               </div>
               <h4 className="font-heading font-bold text-base text-white mb-2 group-hover:text-cyan-300 transition-colors">
                 Direct Conversations
@@ -376,8 +404,8 @@ export default function AuthPage() {
 
             {/* Card 3 */}
             <div className="p-6 rounded-3xl bg-white/[0.03] border border-white/10 hover:border-purple-400/40 hover:-translate-y-1 transition-all duration-200 backdrop-blur-xl group">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 flex items-center justify-center font-bold text-lg mb-4 border border-purple-500/30">
-                👑
+              <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-300 flex items-center justify-center mb-4 border border-purple-500/30">
+                <ShieldAlertIcon className="w-5 h-5 text-purple-300" />
               </div>
               <h4 className="font-heading font-bold text-base text-white mb-2 group-hover:text-purple-300 transition-colors">
                 Right-Click Moderation

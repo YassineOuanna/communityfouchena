@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../utils/api";
+import { HashIcon, XIcon, LockIcon } from "./Icons";
 
 export default function RoomModal({ onClose, onRoomCreated }) {
   const [name, setName] = useState("");
@@ -43,8 +44,8 @@ export default function RoomModal({ onClose, onRoomCreated }) {
       >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-white text-xs font-bold shadow-sm">
-              #
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-500 flex items-center justify-center text-white shadow-sm">
+              <HashIcon className="w-4 h-4" />
             </div>
             <h2 className="text-base font-bold text-white">
               Create New Room
@@ -55,7 +56,7 @@ export default function RoomModal({ onClose, onRoomCreated }) {
             onClick={onClose}
             className="w-8 h-8 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
           >
-            ✕
+            <XIcon className="w-4 h-4" />
           </button>
         </div>
 
@@ -92,7 +93,10 @@ export default function RoomModal({ onClose, onRoomCreated }) {
           <div className="pt-1">
             <label className="flex items-center justify-between cursor-pointer py-1 select-none">
               <div>
-                <p className="text-xs font-semibold text-slate-200">Password Protection</p>
+                <p className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <LockIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Password Protection</span>
+                </p>
                 <p className="text-[11px] text-slate-400">Lock this room with a passcode</p>
               </div>
               <div

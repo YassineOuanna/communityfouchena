@@ -2,6 +2,16 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import EmojiPicker from "emoji-picker-react";
 import { useTheme } from "../context/ThemeContext";
+import {
+  PaperclipIcon,
+  SmileIcon,
+  SendIcon,
+  MicIcon,
+  ImageIcon,
+  FileTextIcon,
+  XIcon,
+  VolumeXIcon,
+} from "./Icons";
 
 export default function MessageInput({
   onSend,
@@ -297,11 +307,11 @@ export default function MessageInput({
               />
             ) : attachmentPreview.fileType === "audio" ? (
               <div className="w-10 h-10 rounded-lg bg-cyan-500/20 text-cyan-300 flex items-center justify-center font-bold">
-                🎙️
+                <MicIcon className="w-5 h-5 text-cyan-400" />
               </div>
             ) : (
               <div className="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold">
-                📎
+                <FileTextIcon className="w-5 h-5 text-indigo-400" />
               </div>
             )}
             <div className="min-w-0">
@@ -320,7 +330,7 @@ export default function MessageInput({
             onClick={() => setAttachmentPreview(null)}
             className="w-6 h-6 rounded-full bg-white/10 hover:bg-rose-500/20 text-[var(--text-muted)] hover:text-rose-400 flex items-center justify-center text-xs"
           >
-            ✕
+            <XIcon className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -360,7 +370,7 @@ export default function MessageInput({
         <div className="p-3.5 rounded-2xl bg-rose-950/30 border border-rose-500/40 backdrop-blur-xl flex items-center justify-between gap-3 text-rose-200">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-base flex-shrink-0">
-              🔇
+              <VolumeXIcon className="w-5 h-5 text-rose-400" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -392,9 +402,7 @@ export default function MessageInput({
               className="p-1.5 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors"
               title="Attach File, Image, or Voice Note"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
+              <PaperclipIcon className="w-5 h-5" />
             </button>
 
             {/* Attach Popup Menu */}
@@ -406,14 +414,14 @@ export default function MessageInput({
                     initial={{ opacity: 0, scale: 0.9, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                    className="absolute bottom-full left-0 mb-2 z-40 w-44 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl p-1.5 space-y-0.5 text-xs select-none"
+                    className="absolute bottom-full left-0 mb-2 z-40 w-48 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl p-1.5 space-y-0.5 text-xs select-none"
                   >
                     <button
                       type="button"
                       onClick={() => imageInputRef.current?.click()}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-white hover:bg-white/10 transition-colors"
                     >
-                      <span>🖼️</span>
+                      <ImageIcon className="w-4 h-4 text-indigo-400" />
                       <span>Send Image</span>
                     </button>
                     <button
@@ -421,7 +429,7 @@ export default function MessageInput({
                       onClick={() => fileInputRef.current?.click()}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-white hover:bg-white/10 transition-colors"
                     >
-                      <span>📎</span>
+                      <FileTextIcon className="w-4 h-4 text-cyan-400" />
                       <span>Attach File</span>
                     </button>
                     <button
@@ -429,7 +437,7 @@ export default function MessageInput({
                       onClick={startRecording}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-cyan-300 hover:bg-cyan-500/10 transition-colors"
                     >
-                      <span>🎙️</span>
+                      <MicIcon className="w-4 h-4 text-rose-400" />
                       <span>Record Voice Note</span>
                     </button>
                   </motion.div>
@@ -447,9 +455,7 @@ export default function MessageInput({
             }`}
             title="Insert Emoji"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.182 15.182a4.5 4.5 0 01-6.364 0M21 12a9 9 0 11-18 0 9 9 0 0118 0zM9.75 9.75c0 .414-.168.75-.375.75S9 10.164 9 9.75 9.168 9 9.375 9s.375.336.375.75zm-.375 0h.008v.015h-.008V9.75zm5.625 0c0 .414-.168.75-.375.75s-.375-.336-.375-.75.168-.75.375-.75.375.336.375.75zm-.375 0h.008v.015h-.008V9.75z" />
-            </svg>
+            <SmileIcon className="w-5 h-5" />
           </button>
 
           {/* Auto-growing Textarea */}
@@ -476,9 +482,7 @@ export default function MessageInput({
             }`}
             title="Send Message"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-              <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-            </svg>
+            <SendIcon className="w-4 h-4" />
           </motion.button>
         </div>
       )}
