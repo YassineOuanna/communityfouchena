@@ -5,9 +5,9 @@ export default {
     extend: {
       colors: {
         accent: {
-          DEFAULT: "#6366f1", // Indigo / Iris glow
+          DEFAULT: "#6366f1", // Main Indigo brand color
           hover: "#4f46e5",
-          cyan: "#06b6d4",
+          cyan: "#06b6d4",    // Vibrant Accent color
           violet: "#8b5cf6",
         },
         glass: {
@@ -21,19 +21,30 @@ export default {
       },
       fontFamily: {
         sans: [
+          "Inter",
           "-apple-system",
           "BlinkMacSystemFont",
           '"Segoe UI"',
           "Roboto",
-          '"Helvetica Neue"',
-          "Arial",
+          "sans-serif",
+        ],
+        heading: [
+          '"Plus Jakarta Sans"',
+          "Inter",
+          "-apple-system",
           "sans-serif",
         ],
       },
       boxShadow: {
         glass: "0 8px 32px 0 rgba(0, 0, 0, 0.37)",
         bubble: "0 4px 14px 0 rgba(99, 102, 241, 0.25)",
-        glow: "0 0 24px -2px rgba(99, 102, 241, 0.3)",
+        glow: "0 0 24px -2px rgba(99, 102, 241, 0.35)",
+        card: "0 10px 30px -10px rgba(0,0,0,0.5)",
+      },
+      borderRadius: {
+        "2xl": "1rem",
+        "3xl": "1.5rem",
+        "4xl": "2rem",
       },
     },
   },

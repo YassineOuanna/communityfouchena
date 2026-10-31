@@ -121,7 +121,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="relative h-[100dvh] w-full bg-[#0c0f1d] overflow-hidden select-none">
+    <div className="relative h-[100dvh] w-full bg-[var(--bg-base)] overflow-hidden select-none transition-colors duration-300">
       {/* Dynamic Ambient Mesh Glow Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
         <motion.div

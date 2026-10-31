@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSocket } from "../context/SocketContext";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import UserItem from "./UserItem";
 import RoomModal from "./RoomModal";
 import AdminModal from "./AdminModal";
@@ -12,6 +13,7 @@ import api from "../utils/api";
 export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM, onLogout, onUserContextMenu }) {
   const { onlineUsers = [], isConnected = false } = useSocket() || {};
   const { user } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const [rooms, setRooms] = useState([{ name: "global", description: "General community chat" }]);
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -233,6 +235,17 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Theme Toggle Button */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-cyan-300 hover:bg-white/10 transition-colors text-xs"
+              title={`Switch Theme: ${theme}`}
+              aria-label="Toggle theme appearance"
+            >
+              {theme === "oled" ? "🖤" : theme === "slate" ? "🌑" : "🌌"}
+            </button>
+
             {/* Change Password Button */}
             <button
               type="button"
