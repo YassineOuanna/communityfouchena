@@ -114,4 +114,36 @@ router.get("/dm/:userId", authMiddleware, async (req, res) => {
   }
 });
 
+// DELETE /api/rooms/:id - Delete room (Admin or creator)
+router.delete("/:id", authMiddleware, async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ message: "Room not found" });
+
+    const isCreator = room.createdBy && room.createdBy.toString() === req.user.id;
+    if (!req.user.isAdmin && !isCreator) {
+      return res.status(403).json({ message: "Admin privileges required to delete channels." });
+    }
+
+    if (room.name === "global") {
+      return res.status(400).json({ message: "Cannot delete the default #global room." });
+    }
+
+    const roomName = room.name;
+    await Promise.all([
+      Room.findByIdAndDelete(req.params.id),
+      Message.deleteMany({ room: roomName }),
+    ]);
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("room_deleted", { roomId: req.params.id, roomName });
+    }
+
+    res.json({ message: `Channel #${roomName} deleted successfully.` });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 module.exports = router;

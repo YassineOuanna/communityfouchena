@@ -107,4 +107,103 @@ router.delete("/messages/:id", async (req, res) => {
   }
 });
 
+// GET /api/admin/rooms - All rooms with message counts & metadata
+router.get("/rooms", async (req, res) => {
+  try {
+    const rooms = await Room.find().sort({ createdAt: -1 });
+    const roomStats = await Promise.all(
+      rooms.map(async (r) => {
+        const msgCount = await Message.countDocuments({ room: r.name });
+        return {
+          ...r.toObject(),
+          messageCount: msgCount,
+        };
+      })
+    );
+    res.json(roomStats);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// POST /api/admin/rooms - Admin creates a new channel
+router.post("/rooms", async (req, res) => {
+  try {
+    const { name, description, isPrivate, password } = req.body;
+    if (!name) return res.status(400).json({ message: "Room name is required" });
+
+    const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    if (!cleanName) return res.status(400).json({ message: "Invalid room name" });
+
+    const exists = await Room.findOne({ name: cleanName });
+    if (exists) return res.status(409).json({ message: `Channel #${cleanName} already exists` });
+
+    const room = new Room({
+      name: cleanName,
+      description: description?.trim() || "",
+      isPrivate: !!isPrivate,
+      password: isPrivate && password ? password : null,
+      createdBy: req.user.id,
+    });
+    await room.save();
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("new_room", { ...room.toObject(), password: undefined });
+    }
+
+    res.status(201).json({ ...room.toObject(), password: undefined });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// DELETE /api/admin/rooms/:id - Admin deletes a room & its messages
+router.delete("/rooms/:id", async (req, res) => {
+  try {
+    const roomToDelete = await Room.findById(req.params.id);
+    if (!roomToDelete) return res.status(404).json({ message: "Room not found" });
+
+    // Protect default global community room
+    if (roomToDelete.name === "global") {
+      return res.status(400).json({ message: "Cannot delete the default #global community room." });
+    }
+
+    const roomName = roomToDelete.name;
+
+    await Promise.all([
+      Room.findByIdAndDelete(req.params.id),
+      Message.deleteMany({ room: roomName }),
+    ]);
+
+    const io = req.app.get("io");
+    if (io) {
+      io.emit("room_deleted", { roomId: req.params.id, roomName });
+    }
+
+    res.json({ message: `Channel #${roomName} and all its messages were permanently deleted.` });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
+// DELETE /api/admin/rooms/:id/messages - Clear all messages in a channel
+router.delete("/rooms/:id/messages", async (req, res) => {
+  try {
+    const room = await Room.findById(req.params.id);
+    if (!room) return res.status(404).json({ message: "Room not found" });
+
+    await Message.deleteMany({ room: room.name });
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(room.name).emit("room_messages_cleared", { room: room.name });
+    }
+
+    res.json({ message: `All messages in #${room.name} have been cleared.` });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 module.exports = router;

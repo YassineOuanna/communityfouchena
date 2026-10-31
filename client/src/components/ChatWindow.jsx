@@ -16,6 +16,7 @@ import {
   SparklesIcon,
   XIcon,
   VolumeXIcon,
+  TrashIcon,
 } from "./Icons";
 
 export default function ChatWindow({
@@ -326,6 +327,12 @@ export default function ChatWindow({
       setTimeout(() => setNotice(""), 6000);
     };
 
+    const onMessagesCleared = ({ room }) => {
+      if (room === currentRoom) {
+        setMessages([]);
+      }
+    };
+
     socket.on("restrictions_state", onRestrictionsState);
     socket.on("user_muted", onUserMuted);
     socket.on("user_unmuted", onUserUnmuted);
@@ -339,6 +346,7 @@ export default function ChatWindow({
     socket.on("user_typing", onTyping);
     socket.on("kicked_from_room", onKicked);
     socket.on("banned", onBanned);
+    socket.on("room_messages_cleared", onMessagesCleared);
     socket.on("moderation_notice", onNotice);
     socket.on("moderation_alert", onNotice);
     socket.on("error", onNotice);
@@ -357,6 +365,7 @@ export default function ChatWindow({
       socket.off("user_typing", onTyping);
       socket.off("kicked_from_room", onKicked);
       socket.off("banned", onBanned);
+      socket.off("room_messages_cleared", onMessagesCleared);
       socket.off("moderation_notice", onNotice);
       socket.off("moderation_alert", onNotice);
       socket.off("error", onNotice);
@@ -439,6 +448,47 @@ export default function ChatWindow({
       return;
     }
     socket.emit("react_message", { messageId, emoji, room: currentRoom });
+  };
+
+  // Admin Clear Current Channel Chat
+  const handleClearCurrentChat = async () => {
+    if (!activeRoom || activeDM) return;
+    const roomId = activeRoom._id || activeRoom.id;
+    if (
+      !window.confirm(
+        `Clear all messages in #${activeRoom.name}? The channel will remain open.`
+      )
+    )
+      return;
+    try {
+      if (roomId) {
+        await api.delete(`/admin/rooms/${roomId}/messages`);
+      }
+      setMessages([]);
+      setNotice(`✅ Cleared all messages in #${activeRoom.name}.`);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to clear chat messages");
+    }
+  };
+
+  // Admin Delete Current Channel
+  const handleDeleteCurrentRoom = async () => {
+    if (!activeRoom || activeDM || activeRoom.name === "global") return;
+    const roomId = activeRoom._id || activeRoom.id;
+    if (
+      !window.confirm(
+        `⚠️ Are you sure you want to permanently delete channel #${activeRoom.name} and all its messages? This action cannot be undone.`
+      )
+    )
+      return;
+    try {
+      if (roomId) {
+        await api.delete(`/admin/rooms/${roomId}`);
+      }
+      onRoomBlocked && onRoomBlocked(activeRoom.name);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete channel");
+    }
   };
 
   const title = activeDM
@@ -579,6 +629,30 @@ export default function ChatWindow({
               >
                 <UsersIcon className="w-4 h-4" />
               </button>
+            )}
+
+            {/* Admin Channel Controls: Clear Messages & Delete Channel */}
+            {user?.isAdmin && !activeDM && (
+              <div className="flex items-center gap-1 border-l border-white/10 pl-2 ml-1">
+                <button
+                  type="button"
+                  onClick={handleClearCurrentChat}
+                  className="p-2 rounded-xl text-[var(--text-muted)] hover:text-amber-300 hover:bg-amber-500/10 transition-colors"
+                  title={`Clear all messages in #${activeRoom?.name}`}
+                >
+                  <TrashIcon className="w-4 h-4 text-amber-400" />
+                </button>
+                {activeRoom?.name !== "global" && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteCurrentRoom}
+                    className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                    title={`Delete channel #${activeRoom?.name} permanently`}
+                  >
+                    <TrashIcon className="w-4 h-4 text-rose-400" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

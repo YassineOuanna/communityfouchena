@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "../context/AuthContext";
+import api from "../utils/api";
 import {
   HashIcon,
   MessagesSquareIcon,
@@ -8,6 +10,7 @@ import {
   PlusIcon,
   XIcon,
   LockIcon,
+  TrashIcon,
 } from "./Icons";
 
 function getAvatarGradient(name = "") {
@@ -42,8 +45,26 @@ export default function ConversationList({
   filterView = "all", // "all", "channels", "dms"
   onFilterChange,
 }) {
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const activeFilter = filterView || "all";
+
+  const handleDeleteRoom = async (e, room) => {
+    e.stopPropagation();
+    if (room.name === "global") return;
+    if (
+      !window.confirm(
+        `⚠️ Permanently delete channel #${room.name} and all its messages? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.delete(`/admin/rooms/${room._id || room.id}`);
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete room");
+    }
+  };
 
   // Filter conversations with strict deduplication
   const filteredRooms = useMemo(() => {
@@ -257,6 +278,18 @@ export default function ConversationList({
                           <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-indigo-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
                             {unread}
                           </span>
+                        )}
+
+                        {/* Admin Delete Channel Action */}
+                        {user?.isAdmin && room.name !== "global" && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteRoom(e, room)}
+                            className="w-7 h-7 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 flex items-center justify-center opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                            title={`Delete channel #${room.name}`}
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </button>
                     );

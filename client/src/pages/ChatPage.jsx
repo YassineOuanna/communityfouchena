@@ -166,9 +166,20 @@ export default function ChatPage() {
       }
     };
 
+    const handleRoomDeleted = ({ roomId, roomName }) => {
+      setRooms((prev) => prev.filter((r) => r._id !== roomId && r.name !== roomName));
+      setActiveRoom((curr) => {
+        if (curr && (curr._id === roomId || curr.name === roomName)) {
+          return DEFAULT_GLOBAL_ROOM;
+        }
+        return curr;
+      });
+    };
+
     socket.on("new_message", handleNewMsg);
     socket.on("new_dm", handleNewDM);
     socket.on("new_room", handleNewRoom);
+    socket.on("room_deleted", handleRoomDeleted);
     socket.on("incoming_call", handleIncomingCall);
     socket.on("call_ended", handleCallEndedGlobal);
     socket.on("ice_candidate", handleEarlyCandidate);
@@ -177,6 +188,7 @@ export default function ChatPage() {
       socket.off("new_message", handleNewMsg);
       socket.off("new_dm", handleNewDM);
       socket.off("new_room", handleNewRoom);
+      socket.off("room_deleted", handleRoomDeleted);
       socket.off("incoming_call", handleIncomingCall);
       socket.off("call_ended", handleCallEndedGlobal);
       socket.off("ice_candidate", handleEarlyCandidate);
