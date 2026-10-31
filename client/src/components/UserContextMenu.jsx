@@ -12,70 +12,79 @@ import {
   UnlockIcon,
   KeyIcon,
   ChevronRightIcon,
+  ChevronDownIcon,
   CheckIcon,
+  CopyIcon,
+  ReplyIcon,
+  EditIcon,
+  TrashIcon,
+  XIcon,
 } from "./Icons";
 
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
 export default function UserContextMenu({
-  target, // { x, y, user: { userId, username, isAdmin }, room }
+  target, // { x, y, user: { userId, username, isAdmin }, room, message, onReply, onEdit, onDelete, onReact }
   onClose,
   onStartDM,
 }) {
   const { socket } = useSocket();
   const { user: currentUser } = useAuth();
   const [activeSubmenu, setActiveSubmenu] = useState(null); // "mute" | "blacklist" | null
-  const [statusMsg, setStatusMsg] = useState("");
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [copiedText, setCopiedText] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const menuRef = useRef(null);
 
-  const targetUser = target?.user || {};
-  const isSelf = !!(targetUser.username && currentUser?.username && targetUser.username.toLowerCase() === currentUser.username.toLowerCase());
-  const isMasterAdmin = ["admin"].includes(targetUser.username?.toLowerCase()) && (currentUser?.username || "").toLowerCase() !== "admin";
-  const canModerate = true; // Always show moderation & mute controls
-
-  // Close on click outside or Escape (with safety delay to avoid immediate closure)
   useEffect(() => {
-    let mounted = true;
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        onClose();
-      }
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
     };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Close on Escape key
+  useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === "Escape") onClose();
     };
-
-    const timer = setTimeout(() => {
-      if (!mounted) return;
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("touchstart", handleClickOutside);
-      document.addEventListener("keydown", handleKeyDown);
-    }, 80);
-
-    return () => {
-      mounted = false;
-      clearTimeout(timer);
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("touchstart", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  if (!target || !target.user) return null;
+  if (!target || (!target.user && !target.message)) return null;
 
-  // Adjust coordinates so menu does not overflow screen
-  const menuWidth = 230;
-  const menuHeight = 320;
+  const targetUser = target?.user || (target?.message ? { userId: target.message.sender, username: target.message.senderName } : {});
+  const targetMessage = target?.message;
+  const isSelf = !!(targetUser.username && currentUser?.username && targetUser.username.toLowerCase() === currentUser.username.toLowerCase());
+  const canModerate = true; // Always show moderation & mute controls
+
+  // Coordinates calculation for desktop floating mode
+  const menuWidth = 240;
+  const menuHeight = 360;
   const safeX = typeof target.x === "number" ? target.x : 100;
   const safeY = typeof target.y === "number" ? target.y : 100;
   const winWidth = typeof window !== "undefined" ? window.innerWidth : 800;
   const winHeight = typeof window !== "undefined" ? window.innerHeight : 600;
-  const x = Math.max(10, Math.min(safeX, winWidth - menuWidth - 20));
-  const y = Math.max(10, Math.min(safeY, winHeight - menuHeight - 20));
-  const openSubmenuOnLeft = x > (winWidth - 440);
+  const posX = Math.max(12, Math.min(safeX, winWidth - menuWidth - 16));
+  const posY = Math.max(12, Math.min(safeY, winHeight - menuHeight - 16));
 
   const targetId = targetUser.userId || targetUser.id || targetUser._id;
   const targetUsername = targetUser.username || "user";
+
+  const handleCopy = () => {
+    if (targetMessage?.content) {
+      navigator.clipboard?.writeText(targetMessage.content);
+      setCopiedText(true);
+      setTimeout(() => {
+        setCopiedText(false);
+        onClose();
+      }, 700);
+    }
+  };
 
   const handleMute = (durationMinutes) => {
     socket?.emit("moderate_user", {
@@ -101,7 +110,7 @@ export default function UserContextMenu({
   const handleKick = () => {
     if (
       !window.confirm(
-        `Are you sure you want to kick @${targetUsername} from #${target.room}? They will not be able to see or rejoin this room.`
+        `Are you sure you want to kick @${targetUsername} from #${target.room}? They will be removed immediately.`
       )
     )
       return;
@@ -115,12 +124,7 @@ export default function UserContextMenu({
   };
 
   const handleBanRoom = () => {
-    if (
-      !window.confirm(
-        `Blacklist @${targetUsername} from #${target.room}?`
-      )
-    )
-      return;
+    if (!window.confirm(`Blacklist @${targetUsername} from #${target.room}?`)) return;
     socket?.emit("moderate_user", {
       targetUserId: targetId,
       targetUsername: targetUsername,
@@ -179,36 +183,146 @@ export default function UserContextMenu({
   };
 
   return (
-    <div className="fixed inset-0 z-50 pointer-events-auto">
+    <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-start pointer-events-auto">
+      {/* Semi-transparent Backdrop for outside clicks */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+      />
+
+      {/* Main Menu Container: Bottom Sheet on Mobile, Floating on Desktop */}
       <motion.div
         ref={menuRef}
-        initial={{ opacity: 0, scale: 0.95, y: -4 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        transition={{ duration: 0.12 }}
-        style={{ left: `${x}px`, top: `${y}px` }}
-        className="absolute w-[220px] rounded-2xl bg-[#0f172a]/95 border border-white/15 backdrop-blur-xl shadow-2xl py-1.5 text-xs text-slate-200 select-none z-50 font-medium"
+        initial={isMobile ? { y: 200, opacity: 0 } : { opacity: 0, scale: 0.95, y: -4 }}
+        animate={isMobile ? { y: 0, opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+        exit={isMobile ? { y: 200, opacity: 0 } : { opacity: 0, scale: 0.95 }}
+        transition={{ type: "spring", stiffness: 420, damping: 30 }}
+        style={!isMobile ? { left: `${posX}px`, top: `${posY}px` } : {}}
+        className={`${
+          isMobile
+            ? "fixed bottom-0 inset-x-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-slate-900 border-t border-white/20 p-4 pb-8 shadow-2xl z-50"
+            : "absolute w-[240px] max-h-[90vh] overflow-y-auto rounded-2xl bg-slate-900/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-2 z-50 text-xs"
+        } select-none text-slate-200 font-medium`}
       >
-        {/* User Card Header */}
-        <div className="px-3 py-2 border-b border-white/10 flex items-center gap-2 mb-1">
-          <div className="w-6 h-6 rounded-lg bg-indigo-500/30 text-indigo-300 font-bold flex items-center justify-center text-[10px]">
-            {targetUser.username?.[0]?.toUpperCase() || "?"}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-white block truncate text-[11px]">
-                @{targetUser.username}
-              </span>
-              {isSelf && (
-                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 px-1 rounded font-semibold">
-                  You
-                </span>
+        {/* Mobile Drag Indicator */}
+        {isMobile && (
+          <div className="w-12 h-1.5 rounded-full bg-white/20 mx-auto mb-3" />
+        )}
+
+        {/* Message Options Header (if opened on a message) */}
+        {targetMessage && (
+          <div className="px-3 pb-2 border-b border-white/10 mb-2">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-1.5">
+              Reactions
+            </p>
+            <div className="flex items-center justify-between gap-1">
+              {QUICK_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => {
+                    target.onReact?.(targetMessage._id, emoji);
+                    onClose();
+                  }}
+                  className="w-8 h-8 rounded-xl bg-white/[0.06] hover:bg-white/20 hover:scale-125 flex items-center justify-center text-sm transition-transform active:scale-95"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-2 space-y-1">
+              {target.onReply && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    target.onReply(targetMessage);
+                    onClose();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
+                >
+                  <ReplyIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Reply</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
+              >
+                {copiedText ? (
+                  <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <CopyIcon className="w-3.5 h-3.5 text-slate-400" />
+                )}
+                <span>{copiedText ? "Copied!" : "Copy Text"}</span>
+              </button>
+
+              {isSelf && target.onEdit && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    target.onEdit(targetMessage);
+                    onClose();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
+                >
+                  <EditIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Edit Message</span>
+                </button>
+              )}
+
+              {(isSelf || currentUser?.isAdmin) && target.onDelete && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    target.onDelete(targetMessage._id);
+                    onClose();
+                  }}
+                  className="w-full text-left px-2.5 py-1.5 rounded-xl hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2 transition-colors"
+                >
+                  <TrashIcon className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Delete Message</span>
+                </button>
               )}
             </div>
-            <span className="text-[9px] text-slate-400 block leading-none mt-0.5">
-              {targetUser.isAdmin ? "👑 Administrator" : "Community Member"}
-            </span>
           </div>
+        )}
+
+        {/* User Card Header */}
+        <div className="px-3 py-2 border-b border-white/10 flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-xl bg-indigo-500/30 text-indigo-300 font-bold flex items-center justify-center text-xs flex-shrink-0">
+              {targetUser.username?.[0]?.toUpperCase() || "?"}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-white block truncate text-xs">
+                  @{targetUser.username}
+                </span>
+                {isSelf && (
+                  <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 px-1 rounded font-semibold">
+                    You
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-400 block leading-none mt-0.5">
+                {targetUser.isAdmin ? "👑 Administrator" : "Community Member"}
+              </span>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-6 h-6 rounded-lg text-slate-400 hover:text-white flex items-center justify-center sm:hidden"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
         </div>
 
         {/* 1. Direct Message */}
@@ -219,57 +333,48 @@ export default function UserContextMenu({
               onStartDM(targetUser);
               onClose();
             }}
-            className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
+            className="w-full text-left px-3 py-2 rounded-xl hover:bg-white/10 flex items-center gap-2 text-slate-200 hover:text-white transition-colors"
           >
-            <MessageSquareIcon className="w-3.5 h-3.5 text-indigo-400" />
+            <MessageSquareIcon className="w-4 h-4 text-indigo-400" />
             <span>Send Direct Message</span>
           </button>
         )}
 
-        {/* Moderation Controls */}
+        {/* Moderation Controls (Available for all moderation and administration) */}
         {canModerate && (
           <>
             <div className="my-1 border-t border-white/10" />
 
-            {/* MUTE MENU WITH HOVER & CLICK DURATIONS */}
-            <div
-              className="relative"
-              onMouseEnter={() => setActiveSubmenu("mute")}
-              onMouseLeave={() => setActiveSubmenu(null)}
-            >
+            {/* MUTE USER (Vertical In-Place Accordion) */}
+            <div>
               <button
                 type="button"
                 onClick={() => setActiveSubmenu(activeSubmenu === "mute" ? null : "mute")}
-                className="w-full text-left px-3 py-1.5 hover:bg-indigo-600/30 flex items-center justify-between text-slate-200 hover:text-white transition-colors group cursor-pointer"
+                className="w-full text-left px-3 py-2 rounded-xl hover:bg-indigo-600/25 flex items-center justify-between text-slate-200 hover:text-white transition-colors cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <VolumeXIcon className="w-3.5 h-3.5 text-indigo-400" />
+                  <VolumeXIcon className="w-4 h-4 text-indigo-400" />
                   <span>Mute User</span>
                 </span>
-                <ChevronRightIcon className="w-3 h-3 text-slate-400 group-hover:text-white" />
+                {activeSubmenu === "mute" ? (
+                  <ChevronDownIcon className="w-3.5 h-3.5 text-indigo-400" />
+                ) : (
+                  <ChevronRightIcon className="w-3.5 h-3.5 text-slate-400" />
+                )}
               </button>
 
-              {/* Submenu: Mute Durations */}
               <AnimatePresence>
                 {activeSubmenu === "mute" && (
                   <motion.div
-                    initial={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
-                    style={{
-                      left: openSubmenuOnLeft ? "auto" : "210px",
-                      right: openSubmenuOnLeft ? "210px" : "auto",
-                      top: 0,
-                    }}
-                    className="absolute w-[180px] rounded-2xl bg-[#0f172a]/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-1 text-xs text-slate-200 z-50 select-none"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden pl-3 pr-1 py-1 space-y-1 bg-white/[0.03] rounded-xl border border-white/5 my-1"
                   >
-                    <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-white/10 mb-1">
-                      Mute Duration
-                    </div>
                     <button
                       type="button"
                       onClick={() => handleMute(15)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center justify-between text-slate-200 hover:text-white"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between text-xs text-slate-300 hover:text-white"
                     >
                       <span>15 Minutes</span>
                       <span className="text-[10px] text-slate-500">15m</span>
@@ -277,7 +382,7 @@ export default function UserContextMenu({
                     <button
                       type="button"
                       onClick={() => handleMute(60)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center justify-between text-slate-200 hover:text-white"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between text-xs text-slate-300 hover:text-white"
                     >
                       <span>1 Hour</span>
                       <span className="text-[10px] text-slate-500">1h</span>
@@ -285,7 +390,7 @@ export default function UserContextMenu({
                     <button
                       type="button"
                       onClick={() => handleMute(1440)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-white/10 flex items-center justify-between text-slate-200 hover:text-white"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-center justify-between text-xs text-slate-300 hover:text-white"
                     >
                       <span>24 Hours</span>
                       <span className="text-[10px] text-slate-500">1d</span>
@@ -293,18 +398,18 @@ export default function UserContextMenu({
                     <button
                       type="button"
                       onClick={() => handleMute(null)}
-                      className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 flex items-center justify-between font-semibold"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-xs text-rose-300 hover:text-rose-100 flex items-center justify-between font-semibold"
                     >
                       <span>Permanent Mute</span>
-                      <span className="text-[10px] text-rose-400">Perma</span>
+                      <span className="text-[10px] text-rose-400 font-bold">Perma</span>
                     </button>
-                    <div className="my-1 border-t border-white/10" />
+                    <div className="border-t border-white/10 my-0.5" />
                     <button
                       type="button"
                       onClick={handleUnmute}
-                      className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2 font-semibold"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/20 text-xs text-emerald-300 hover:text-emerald-100 flex items-center gap-2 font-semibold"
                     >
-                      <CheckIcon className="w-3.5 h-3.5" />
+                      <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Lift Channel Mute</span>
                     </button>
                   </motion.div>
@@ -312,47 +417,38 @@ export default function UserContextMenu({
               </AnimatePresence>
             </div>
 
-            {/* BLACKLIST / BAN MENU */}
-            <div
-              className="relative"
-              onMouseEnter={() => setActiveSubmenu("blacklist")}
-              onMouseLeave={() => setActiveSubmenu(null)}
-            >
+            {/* BLACKLIST / BAN (Vertical In-Place Accordion) */}
+            <div>
               <button
                 type="button"
                 onClick={() => setActiveSubmenu(activeSubmenu === "blacklist" ? null : "blacklist")}
-                className="w-full text-left px-3 py-1.5 hover:bg-rose-600/20 flex items-center justify-between text-rose-300 hover:text-rose-100 transition-colors group cursor-pointer"
+                className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-600/20 flex items-center justify-between text-rose-300 hover:text-rose-100 transition-colors cursor-pointer"
               >
                 <span className="flex items-center gap-2">
-                  <BanIcon className="w-3.5 h-3.5 text-rose-400" />
+                  <BanIcon className="w-4 h-4 text-rose-400" />
                   <span>Blacklist / Ban</span>
                 </span>
-                <ChevronRightIcon className="w-3 h-3 text-slate-400 group-hover:text-white" />
+                {activeSubmenu === "blacklist" ? (
+                  <ChevronDownIcon className="w-3.5 h-3.5 text-rose-400" />
+                ) : (
+                  <ChevronRightIcon className="w-3.5 h-3.5 text-slate-400" />
+                )}
               </button>
 
-              {/* Submenu: Blacklist Scope */}
               <AnimatePresence>
                 {activeSubmenu === "blacklist" && (
                   <motion.div
-                    initial={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
-                    style={{
-                      left: openSubmenuOnLeft ? "auto" : "210px",
-                      right: openSubmenuOnLeft ? "210px" : "auto",
-                      top: 0,
-                    }}
-                    className="absolute w-[210px] rounded-2xl bg-[#0f172a]/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-1 text-xs text-slate-200 z-50 select-none"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden pl-3 pr-1 py-1 space-y-1 bg-rose-500/[0.04] rounded-xl border border-rose-500/10 my-1"
                   >
-                    <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-white/10 mb-1">
-                      Blacklist Target
-                    </div>
                     {target.room && !target.room.startsWith("dm_") && (
                       <>
                         <button
                           type="button"
                           onClick={handleBanRoom}
-                          className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2"
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-xs text-rose-300 hover:text-rose-100 flex items-center gap-2"
                         >
                           <BanIcon className="w-3.5 h-3.5 text-rose-400" />
                           <span>Blacklist from #{target.room}</span>
@@ -360,19 +456,17 @@ export default function UserContextMenu({
                         <button
                           type="button"
                           onClick={handleUnbanRoom}
-                          className="w-full text-left px-3 py-1.5 hover:bg-white/10 text-slate-300 hover:text-white flex items-center gap-2"
+                          className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-xs text-slate-300 hover:text-white flex items-center gap-2"
                         >
                           <UnlockIcon className="w-3.5 h-3.5 text-cyan-400" />
                           <span>Remove #{target.room} Blacklist</span>
                         </button>
                       </>
                     )}
-
-                    <div className="my-1 border-t border-white/10" />
                     <button
                       type="button"
                       onClick={handleGlobalBan}
-                      className="w-full text-left px-3 py-1.5 hover:bg-rose-700/30 text-rose-400 hover:text-rose-200 flex items-center gap-2 font-bold"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-rose-700/30 text-xs text-rose-400 hover:text-rose-200 flex items-center gap-2 font-bold"
                     >
                       <ShieldAlertIcon className="w-3.5 h-3.5 text-rose-500" />
                       <span>Blacklist Globally</span>
@@ -380,7 +474,7 @@ export default function UserContextMenu({
                     <button
                       type="button"
                       onClick={handleUnbanGlobal}
-                      className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2"
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-emerald-500/20 text-xs text-emerald-300 hover:text-emerald-100 flex items-center gap-2"
                     >
                       <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Lift Global Blacklist</span>
@@ -390,15 +484,15 @@ export default function UserContextMenu({
               </AnimatePresence>
             </div>
 
-            {/* KICK FROM CHANNEL */}
+            {/* KICK FROM ROOM */}
             {target.room && !target.room.startsWith("dm_") && (
               <button
                 type="button"
                 onClick={handleKick}
-                className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2 transition-colors cursor-pointer"
-                title="User will be kicked and won't be able to see or rejoin this room"
+                className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2 transition-colors cursor-pointer"
+                title="Kick user from room"
               >
-                <UserMinusIcon className="w-3.5 h-3.5 text-amber-400" />
+                <UserMinusIcon className="w-4 h-4 text-amber-400" />
                 <span>Kick from #{target.room}</span>
               </button>
             )}
@@ -408,25 +502,24 @@ export default function UserContextMenu({
             <button
               type="button"
               onClick={() => setShowPasswordPrompt(true)}
-              className="w-full text-left px-3 py-1.5 hover:bg-amber-500/20 text-amber-300 hover:text-amber-100 flex items-center gap-2 transition-colors font-semibold cursor-pointer"
+              className="w-full text-left px-3 py-2 rounded-xl hover:bg-amber-500/20 text-amber-300 hover:text-amber-100 flex items-center gap-2 transition-colors font-semibold cursor-pointer"
             >
-              <KeyIcon className="w-3.5 h-3.5 text-amber-400" />
+              <KeyIcon className="w-4 h-4 text-amber-400" />
               <span>Reset User Password</span>
             </button>
           </>
         )}
-
       </motion.div>
 
-      {/* Password Reset Dialog */}
+      {/* Password Reset Modal */}
       <AnimatePresence>
         {showPasswordPrompt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="w-full max-w-sm rounded-2xl bg-slate-900 border border-white/20 p-5 shadow-2xl"
+              className="w-full max-w-sm rounded-3xl bg-slate-900 border border-white/20 p-5 shadow-2xl"
             >
               <h4 className="text-sm font-bold text-white mb-1">
                 Reset Password for @{targetUser.username}
@@ -442,19 +535,19 @@ export default function UserContextMenu({
                   placeholder="Enter new password (min 4 chars)..."
                   required
                   minLength={4}
-                  className="w-full px-3 py-2 rounded-xl bg-white/[0.06] border border-white/15 text-xs text-white focus:outline-none focus:border-amber-400"
+                  className="w-full px-3 py-2.5 rounded-xl bg-white/[0.06] border border-white/15 text-xs text-white focus:outline-none focus:border-amber-400"
                 />
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => setShowPasswordPrompt(false)}
-                    className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/10"
+                    className="px-3 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-white/10"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-3 py-1.5 rounded-lg text-xs bg-amber-500 hover:bg-amber-400 font-bold text-slate-950 shadow-md"
+                    className="px-3.5 py-1.5 rounded-xl text-xs bg-amber-500 hover:bg-amber-400 font-bold text-slate-950 shadow-md"
                   >
                     Save Password
                   </button>

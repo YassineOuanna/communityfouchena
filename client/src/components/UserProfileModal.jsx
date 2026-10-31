@@ -2,8 +2,18 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
+import { useTheme } from "../context/ThemeContext";
 import api from "../utils/api";
-import { UserIcon, XIcon, KeyIcon } from "./Icons";
+import {
+  UserIcon,
+  XIcon,
+  KeyIcon,
+  SunIcon,
+  MoonIcon,
+  PaletteIcon,
+  ShieldAlertIcon,
+  LogOutIcon,
+} from "./Icons";
 
 const PRESET_STATUSES = [
   { emoji: "⚡", text: "Building something awesome" },
@@ -14,10 +24,18 @@ const PRESET_STATUSES = [
   { emoji: "🚀", text: "Shipping fast" },
 ];
 
-export default function UserProfileModal({ onClose, onChangePassword }) {
+export default function UserProfileModal({
+  onClose,
+  onChangePassword,
+  onOpenAdmin,
+  onLogout,
+}) {
   const { user, setUser } = useAuth();
   const { socket } = useSocket();
-  const [customStatus, setCustomStatus] = useState(user?.customStatus || "Exploring the community ✨");
+  const { theme, toggleTheme, setTheme } = useTheme();
+  const [customStatus, setCustomStatus] = useState(
+    user?.customStatus || "Exploring the community ✨"
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -144,6 +162,80 @@ export default function UserProfileModal({ onClose, onChangePassword }) {
             </div>
           </div>
 
+          {/* Theme Appearance Selector */}
+          <div>
+            <span className="block text-[11px] font-medium text-[var(--text-muted)] mb-2">
+              Appearance Theme:
+            </span>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { id: "dark", label: "Midnight", icon: <MoonIcon className="w-3.5 h-3.5 text-purple-400" /> },
+                { id: "oled", label: "OLED", icon: <MoonIcon className="w-3.5 h-3.5 text-indigo-400" /> },
+                { id: "slate", label: "Slate", icon: <PaletteIcon className="w-3.5 h-3.5 text-cyan-400" /> },
+                { id: "light", label: "Light", icon: <SunIcon className="w-3.5 h-3.5 text-amber-400" /> },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTheme && setTheme(t.id)}
+                  className={`py-1.5 px-2 rounded-xl text-xs border flex flex-col items-center gap-1 transition-all ${
+                    theme === t.id
+                      ? "bg-indigo-600/30 border-indigo-400/60 text-white font-bold"
+                      : "bg-white/[0.04] border-white/10 text-[var(--text-muted)] hover:text-white"
+                  }`}
+                >
+                  {t.icon}
+                  <span className="text-[10px]">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick Account Controls (Admin & Logout) */}
+          <div className="pt-2 flex flex-wrap items-center gap-2 border-t border-white/10">
+            {user?.isAdmin && onOpenAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenAdmin();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30 hover:bg-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+              >
+                <ShieldAlertIcon className="w-3.5 h-3.5" />
+                <span>Admin Panel</span>
+              </button>
+            )}
+
+            {onChangePassword && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onChangePassword();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/15 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors"
+              >
+                <KeyIcon className="w-3.5 h-3.5" />
+                <span>Password</span>
+              </button>
+            )}
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onLogout();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-semibold text-rose-300 hover:text-white flex items-center gap-1.5 transition-colors ml-auto"
+              >
+                <LogOutIcon className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            )}
+          </div>
+
           {message && (
             <p className="text-xs text-center font-medium text-emerald-400">
               {message}
@@ -152,20 +244,6 @@ export default function UserProfileModal({ onClose, onChangePassword }) {
 
           {/* Action Buttons */}
           <div className="pt-2 flex items-center gap-2 justify-end">
-            {onChangePassword && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onChangePassword();
-                }}
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors mr-auto flex items-center gap-1.5"
-              >
-                <KeyIcon className="w-3.5 h-3.5" />
-                <span>Change Password</span>
-              </button>
-            )}
-
             <button
               type="button"
               onClick={onClose}

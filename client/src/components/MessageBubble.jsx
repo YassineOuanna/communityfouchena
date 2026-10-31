@@ -10,6 +10,7 @@ import {
   TrashIcon,
   FileTextIcon,
   XIcon,
+  MoreVerticalIcon,
 } from "./Icons";
 
 function getAvatarGradient(name = "") {
@@ -46,11 +47,56 @@ export default function MessageBubble({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const audioRef = useRef(null);
+  const touchTimerRef = useRef(null);
+  const touchMovedRef = useRef(false);
 
   const time = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const openContextMenu = (e, clientX, clientY) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    const x = clientX ?? e?.clientX ?? (typeof window !== "undefined" ? window.innerWidth / 2 : 150);
+    const y = clientY ?? e?.clientY ?? (typeof window !== "undefined" ? window.innerHeight / 2 : 200);
+    if (onUserContextMenu) {
+      onUserContextMenu(
+        { clientX: x, clientY: y, preventDefault: () => {}, stopPropagation: () => {} },
+        { userId: msg.sender, username: msg.senderName },
+        null,
+        {
+          message: msg,
+          onReply,
+          onEdit,
+          onDelete,
+          onReact,
+        }
+      );
+    }
+  };
+
+  const handleTouchStart = (e) => {
+    touchMovedRef.current = false;
+    const touch = e.touches?.[0];
+    const x = touch?.clientX;
+    const y = touch?.clientY;
+    touchTimerRef.current = setTimeout(() => {
+      if (!touchMovedRef.current) {
+        if (navigator.vibrate) navigator.vibrate(30);
+        openContextMenu(e, x, y);
+      }
+    }, 380);
+  };
+
+  const handleTouchMove = () => {
+    touchMovedRef.current = true;
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+  };
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
@@ -134,13 +180,12 @@ export default function MessageBubble({
 
         {/* Message Bubble Box */}
         <div
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onUserContextMenu &&
-              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
-          }}
-          className={`relative px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed break-words shadow-sm transition-all select-text ${
+          onContextMenu={openContextMenu}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+          className={`relative px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed break-words shadow-sm transition-all select-text cursor-pointer ${
             isOwn
               ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-br-xs shadow-bubble"
               : "bg-[var(--neutral-bubble)] text-[var(--text-main)] rounded-bl-xs border border-white/10"
@@ -244,6 +289,18 @@ export default function MessageBubble({
             <span className="text-[10px] opacity-70 ml-1.5">(edited)</span>
           )}
         </div>
+
+        {/* Quick Context / Moderation Action Button (Always tapable on mobile, visible on hover on PC) */}
+        {!msg.isDeleted && (
+          <button
+            type="button"
+            onClick={openContextMenu}
+            className="w-7 h-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 flex items-center justify-center opacity-40 sm:opacity-0 group-hover/msg:opacity-100 transition-opacity flex-shrink-0 self-center active:scale-95 cursor-pointer"
+            title="Options & Moderation"
+          >
+            <MoreVerticalIcon className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Hover Action Menu Bar (Quick Reactions, Reply, Edit, Delete) */}
         {!msg.isDeleted && (

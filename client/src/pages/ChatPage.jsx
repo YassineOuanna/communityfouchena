@@ -41,6 +41,7 @@ export default function ChatPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [activeCall, setActiveCall] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
+  const pendingCandidatesRef = useRef([]);
 
   // Navigation rail view ("all", "channels", "dms")
   const [railView, setRailView] = useState("all");
@@ -159,11 +160,18 @@ export default function ChatPage() {
       });
     };
 
+    const handleEarlyCandidate = ({ candidate }) => {
+      if (candidate) {
+        pendingCandidatesRef.current.push(candidate);
+      }
+    };
+
     socket.on("new_message", handleNewMsg);
     socket.on("new_dm", handleNewDM);
     socket.on("new_room", handleNewRoom);
     socket.on("incoming_call", handleIncomingCall);
     socket.on("call_ended", handleCallEndedGlobal);
+    socket.on("ice_candidate", handleEarlyCandidate);
 
     return () => {
       socket.off("new_message", handleNewMsg);
@@ -171,6 +179,7 @@ export default function ChatPage() {
       socket.off("new_room", handleNewRoom);
       socket.off("incoming_call", handleIncomingCall);
       socket.off("call_ended", handleCallEndedGlobal);
+      socket.off("ice_candidate", handleEarlyCandidate);
     };
   }, [socket, activeRoom, activeDM, user]);
 
@@ -275,14 +284,21 @@ export default function ChatPage() {
   );
 
   const handleUserContextMenu = useCallback(
-    (e, targetUser, roomName) => {
-      e.preventDefault();
-      e.stopPropagation();
+    (e, targetUser, roomName, messageMeta = null) => {
+      e?.preventDefault?.();
+      e?.stopPropagation?.();
+      const clientX = e?.clientX ?? e?.touches?.[0]?.clientX ?? (typeof window !== "undefined" ? window.innerWidth / 2 : 150);
+      const clientY = e?.clientY ?? e?.touches?.[0]?.clientY ?? (typeof window !== "undefined" ? window.innerHeight / 2 : 200);
       setContextMenu({
-        x: e.clientX,
-        y: e.clientY,
+        x: clientX,
+        y: clientY,
         user: targetUser,
         room: roomName || activeRoom?.name || "global",
+        message: messageMeta?.message || null,
+        onReply: messageMeta?.onReply,
+        onEdit: messageMeta?.onEdit,
+        onDelete: messageMeta?.onDelete,
+        onReact: messageMeta?.onReact,
       });
     },
     [activeRoom]
@@ -294,6 +310,7 @@ export default function ChatPage() {
 
   const handleStartCall = useCallback(
     (target, type = "voice") => {
+      pendingCandidatesRef.current = [];
       const callTarget =
         target ||
         activeDM || {
@@ -371,12 +388,12 @@ export default function ChatPage() {
 
             {/* Mobile Bottom Navigation Bar (Visible only on mobile in list view) */}
             {isMobile && (
-              <div className="px-4 py-3 border-t border-white/10 bg-slate-950/80 backdrop-blur-xl flex items-center justify-around safe-pb flex-shrink-0">
+              <div className="px-2 py-2.5 border-t border-white/10 bg-slate-950/80 backdrop-blur-xl flex items-center justify-around safe-pb flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setRailView("all")}
-                  className={`flex flex-col items-center gap-1 text-[11px] ${
-                    railView === "all" ? "text-indigo-400 font-bold" : "text-slate-400"
+                  className={`flex flex-col items-center gap-1 text-[10px] ${
+                    railView === "all" ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   <MessagesSquareIcon className="w-5 h-5" />
@@ -385,8 +402,8 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setRailView("channels")}
-                  className={`flex flex-col items-center gap-1 text-[11px] ${
-                    railView === "channels" ? "text-indigo-400 font-bold" : "text-slate-400"
+                  className={`flex flex-col items-center gap-1 text-[10px] ${
+                    railView === "channels" ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-white"
                   }`}
                 >
                   <HashIcon className="w-5 h-5" />
@@ -394,8 +411,18 @@ export default function ChatPage() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setRailView("dms")}
+                  className={`flex flex-col items-center gap-1 text-[10px] ${
+                    railView === "dms" ? "text-indigo-400 font-bold" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <UsersIcon className="w-5 h-5" />
+                  <span>Direct</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleStartCall(null, "voice")}
-                  className="flex flex-col items-center gap-1 text-[11px] text-slate-400 hover:text-white"
+                  className="flex flex-col items-center gap-1 text-[10px] text-slate-400 hover:text-white"
                 >
                   <PhoneCallIcon className="w-5 h-5" />
                   <span>Call</span>
@@ -403,10 +430,11 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(true)}
-                  className="flex flex-col items-center gap-1 text-[11px] text-slate-400 hover:text-white"
+                  className="flex flex-col items-center gap-1 text-[10px] text-slate-400 hover:text-white relative"
                 >
                   <UserIcon className="w-5 h-5" />
                   <span>Profile</span>
+                  <span className="absolute top-0 right-2 w-2 h-2 rounded-full bg-emerald-400 border border-slate-900" />
                 </button>
               </div>
             )}
@@ -471,6 +499,8 @@ export default function ChatPage() {
           <UserProfileModal
             onClose={() => setShowProfileModal(false)}
             onChangePassword={() => setShowPasswordModal(true)}
+            onOpenAdmin={() => setShowAdminModal(true)}
+            onLogout={handleLogout}
           />
         )}
 
@@ -493,6 +523,8 @@ export default function ChatPage() {
           <IncomingCallModal
             call={incomingCall}
             onAccept={() => {
+              const earlyCandidates = [...pendingCandidatesRef.current];
+              pendingCandidatesRef.current = [];
               setActiveCall({
                 target: {
                   userId: incomingCall.fromUserId,
@@ -502,10 +534,12 @@ export default function ChatPage() {
                 type: incomingCall.type || "voice",
                 isCaller: false,
                 incomingOffer: incomingCall.offer,
+                initialCandidates: earlyCandidates,
               });
               setIncomingCall(null);
             }}
             onDecline={() => {
+              pendingCandidatesRef.current = [];
               socket?.emit("call_response", {
                 toUserId: incomingCall.fromUserId,
                 action: "declined",
@@ -522,7 +556,11 @@ export default function ChatPage() {
             type={activeCall.type}
             isCaller={activeCall.isCaller}
             incomingOffer={activeCall.incomingOffer}
-            onClose={() => setActiveCall(null)}
+            initialCandidates={activeCall.initialCandidates || []}
+            onClose={() => {
+              setActiveCall(null);
+              pendingCandidatesRef.current = [];
+            }}
           />
         )}
       </AnimatePresence>

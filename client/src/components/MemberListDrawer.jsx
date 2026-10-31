@@ -115,32 +115,39 @@ export default function MemberListDrawer({
   };
 
   return (
-    <motion.div
-      initial={{ x: 260, opacity: 0 }}
-      animate={{ x: 0, opacity: 1 }}
-      exit={{ x: 260, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 400, damping: 35 }}
-      className="w-64 h-full border-l border-white/10 bg-slate-900/60 backdrop-blur-2xl flex flex-col flex-shrink-0 z-20"
-    >
-      {/* Drawer Header */}
-      <div className="px-4 py-3.5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
-            Room Members
-          </span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
-            {onlineUsers.length}
-          </span>
+    <>
+      {/* Mobile Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden"
+        onClick={onClose}
+      />
+
+      <motion.div
+        initial={{ x: 280, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        exit={{ x: 280, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 35 }}
+        className="fixed md:relative inset-y-0 right-0 z-40 w-72 max-w-[85vw] md:w-64 h-full border-l border-white/10 bg-slate-900/95 md:bg-slate-900/60 backdrop-blur-2xl flex flex-col flex-shrink-0 shadow-2xl md:shadow-none"
+      >
+        {/* Drawer Header */}
+        <div className="px-4 py-3.5 border-b border-white/10 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[var(--text-main)] uppercase tracking-wider">
+              Room Members
+            </span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30">
+              {onlineUsers.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors"
+            title="Close member list"
+          >
+            <XIcon className="w-4 h-4" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-main)] hover:bg-white/10 transition-colors"
-          title="Close member list"
-        >
-          <XIcon className="w-4 h-4" />
-        </button>
-      </div>
 
       {/* Member Sections */}
       <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
@@ -179,5 +186,6 @@ export default function MemberListDrawer({
         </div>
       </div>
     </motion.div>
+    </>
   );
 }

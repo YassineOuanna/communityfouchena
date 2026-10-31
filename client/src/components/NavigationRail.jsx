@@ -55,14 +55,18 @@ export default function NavigationRail({
     <div className="w-16 h-full flex flex-col items-center py-4 justify-between border-r border-white/10 bg-slate-950/40 backdrop-blur-2xl flex-shrink-0 select-none z-20">
       {/* Top: Brand Logo / Workspace Icon */}
       <div className="flex flex-col items-center gap-6">
-        <div
-          className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 via-indigo-600 to-cyan-400 p-[1.5px] shadow-[0_0_20px_rgba(99,102,241,0.35)] cursor-pointer hover:scale-105 transition-transform"
-          title="CommunityFouchena"
+        <button
+          type="button"
+          onClick={() => onSelectView?.("all")}
+          className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-indigo-500 via-purple-600 to-cyan-400 p-[1.5px] shadow-[0_0_24px_rgba(99,102,241,0.4)] cursor-pointer hover:scale-105 active:scale-95 transition-all group"
+          title="Community Fouchena • Home"
         >
-          <div className="w-full h-full rounded-[14px] bg-slate-900 flex items-center justify-center text-white">
-            <MessageSquareIcon className="w-5 h-5 text-indigo-400" />
+          <div className="w-full h-full rounded-[14px] bg-slate-950 flex items-center justify-center text-white font-black tracking-wider text-xs group-hover:bg-slate-900 transition-colors">
+            <span className="bg-gradient-to-r from-indigo-400 via-cyan-300 to-purple-400 bg-clip-text text-transparent font-extrabold text-sm">
+              CF
+            </span>
           </div>
-        </div>
+        </button>
 
         {/* Navigation Bar Icons */}
         <div className="flex flex-col items-center gap-2">
