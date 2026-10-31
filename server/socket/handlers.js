@@ -3,7 +3,7 @@ const Message = require("../models/Message");
 const User = require("../models/User");
 const Room = require("../models/Room");
 
-// online users map: socketId -> { userId, username, isAdmin }
+// online users map: socketId -> { userId, username, isAdmin, customStatus, avatar }
 const onlineUsers = new Map();
 
 module.exports = (io) => {
@@ -20,10 +20,22 @@ module.exports = (io) => {
     }
   });
 
-  io.on("connection", (socket) => {
+  io.on("connection", async (socket) => {
     const { id: userId, username } = socket.user;
-    const isAdmin = socket.user.isAdmin || ["admin", "wana"].includes(username);
-    onlineUsers.set(socket.id, { userId, username, isAdmin });
+    const isAdmin = socket.user.isAdmin || ["admin", "wana"].includes((username || "").toLowerCase());
+
+    let userDocData = null;
+    try {
+      userDocData = await User.findById(userId).select("customStatus avatar");
+    } catch {}
+
+    onlineUsers.set(socket.id, {
+      userId,
+      username,
+      isAdmin,
+      customStatus: userDocData?.customStatus || "Exploring the community ✨",
+      avatar: userDocData?.avatar || null,
+    });
 
     // Broadcast updated online list
     io.emit("online_users", getOnlineList());
@@ -53,11 +65,13 @@ module.exports = (io) => {
       socket.currentRoom = cleanRoom;
     });
 
-    // Send message to room (with strict moderation enforcement)
-    socket.on("send_message", async ({ room, content }) => {
-      if (!content || typeof content !== "string") return;
-      const cleanContent = content.trim();
-      if (!cleanContent || cleanContent.length > 2000) return;
+    // Send message to room (with reply, attachment, moderation enforcement)
+    socket.on("send_message", async ({ room, content, replyTo, attachment }) => {
+      const hasContent = content && typeof content === "string" && content.trim().length > 0;
+      const hasAttachment = attachment && (attachment.url || attachment.data);
+      if (!hasContent && !hasAttachment) return;
+
+      const cleanContent = hasContent ? content.trim().slice(0, 2000) : "";
       if (!room || typeof room !== "string") return;
       const cleanRoom = room.slice(0, 50).trim();
 
@@ -99,25 +113,47 @@ module.exports = (io) => {
           }
         }
 
-        const msg = await Message.create({
+        const msgPayload = {
           sender: userId,
           senderName: username,
           content: cleanContent,
           room: cleanRoom,
           seenBy: [],
-        });
+        };
+
+        if (replyTo && replyTo.messageId) {
+          msgPayload.replyTo = {
+            messageId: replyTo.messageId,
+            senderName: replyTo.senderName || "",
+            content: (replyTo.content || "").slice(0, 150),
+          };
+        }
+
+        if (attachment) {
+          msgPayload.attachment = {
+            url: attachment.url || attachment.data,
+            fileType: attachment.fileType || "file",
+            fileName: attachment.fileName || "attachment",
+            fileSize: attachment.fileSize || 0,
+            duration: attachment.duration || null,
+          };
+        }
+
+        const msg = await Message.create(msgPayload);
         io.to(cleanRoom).emit("new_message", msg);
       } catch (err) {
-        socket.emit("error", { message: "Failed to send message" });
+        socket.emit("error", { message: "Failed to send message: " + err.message });
       }
     });
 
-    // Send DM (with ban check)
-    socket.on("send_dm", async ({ toUserId, toUsername, content }) => {
-      if (!content || typeof content !== "string") return;
-      const cleanContent = content.trim();
-      if (!cleanContent || cleanContent.length > 2000) return;
+    // Send DM (with ban check, replyTo, attachment)
+    socket.on("send_dm", async ({ toUserId, toUsername, content, replyTo, attachment }) => {
+      const hasContent = content && typeof content === "string" && content.trim().length > 0;
+      const hasAttachment = attachment && (attachment.url || attachment.data);
+      if (!hasContent && !hasAttachment) return;
       if (!toUserId) return;
+
+      const cleanContent = hasContent ? content.trim().slice(0, 2000) : "";
 
       try {
         const userDoc = await User.findById(userId);
@@ -126,14 +162,34 @@ module.exports = (io) => {
           return;
         }
 
-        const msg = await Message.create({
+        const msgPayload = {
           sender: userId,
           senderName: username,
           content: cleanContent,
           room: `dm_${[userId, toUserId].sort().join("_")}`,
           dmTo: toUserId,
           seenBy: [],
-        });
+        };
+
+        if (replyTo && replyTo.messageId) {
+          msgPayload.replyTo = {
+            messageId: replyTo.messageId,
+            senderName: replyTo.senderName || "",
+            content: (replyTo.content || "").slice(0, 150),
+          };
+        }
+
+        if (attachment) {
+          msgPayload.attachment = {
+            url: attachment.url || attachment.data,
+            fileType: attachment.fileType || "file",
+            fileName: attachment.fileName || "attachment",
+            fileSize: attachment.fileSize || 0,
+            duration: attachment.duration || null,
+          };
+        }
+
+        const msg = await Message.create(msgPayload);
 
         for (const [sId, u] of onlineUsers) {
           if (u.userId === toUserId) {
@@ -142,13 +198,142 @@ module.exports = (io) => {
         }
         socket.emit("new_dm", { ...msg.toObject(), fromUsername: username });
       } catch (err) {
-        socket.emit("error", { message: "Failed to send DM" });
+        socket.emit("error", { message: "Failed to send DM: " + err.message });
+      }
+    });
+
+    // Edit message
+    socket.on("edit_message", async ({ messageId, newContent, room }) => {
+      if (!messageId || !newContent || typeof newContent !== "string") return;
+      try {
+        const msg = await Message.findById(messageId);
+        if (!msg) return;
+        if (msg.sender.toString() !== userId) {
+          socket.emit("error", { message: "You can only edit your own messages" });
+          return;
+        }
+        msg.content = newContent.trim().slice(0, 2000);
+        msg.isEdited = true;
+        msg.editedAt = new Date();
+        await msg.save();
+        io.to(room).emit("message_edited", msg);
+      } catch (err) {
+        socket.emit("error", { message: "Failed to edit message" });
+      }
+    });
+
+    // Delete message
+    socket.on("delete_message", async ({ messageId, room }) => {
+      if (!messageId) return;
+      try {
+        const msg = await Message.findById(messageId);
+        if (!msg) return;
+        const canDelete = msg.sender.toString() === userId || isAdmin;
+        if (!canDelete) {
+          socket.emit("error", { message: "Permission denied" });
+          return;
+        }
+        msg.isDeleted = true;
+        msg.content = "This message was deleted.";
+        msg.attachment = null;
+        await msg.save();
+        io.to(room).emit("message_deleted", { messageId, room, isDeleted: true });
+      } catch (err) {
+        socket.emit("error", { message: "Failed to delete message" });
+      }
+    });
+
+    // Emoji reaction toggle
+    socket.on("react_message", async ({ messageId, emoji, room }) => {
+      if (!messageId || !emoji) return;
+      try {
+        const msg = await Message.findById(messageId);
+        if (!msg) return;
+        if (!Array.isArray(msg.reactions)) msg.reactions = [];
+
+        const existingReaction = msg.reactions.find((r) => r.emoji === emoji);
+        if (existingReaction) {
+          const userIdx = existingReaction.users.findIndex(
+            (u) => u.username === username || u.userId === userId
+          );
+          if (userIdx > -1) {
+            existingReaction.users.splice(userIdx, 1);
+            if (existingReaction.users.length === 0) {
+              msg.reactions = msg.reactions.filter((r) => r.emoji !== emoji);
+            }
+          } else {
+            existingReaction.users.push({ userId, username });
+          }
+        } else {
+          msg.reactions.push({
+            emoji,
+            users: [{ userId, username }],
+          });
+        }
+
+        await msg.save();
+        io.to(room).emit("message_reacted", {
+          messageId,
+          reactions: msg.reactions,
+          room,
+        });
+      } catch (err) {
+        socket.emit("error", { message: "Failed to react to message" });
+      }
+    });
+
+    // Update profile custom status
+    socket.on("update_custom_status", async ({ status }) => {
+      try {
+        const clean = (status || "").slice(0, 100);
+        await User.findByIdAndUpdate(userId, { customStatus: clean });
+        for (const [sId, u] of onlineUsers) {
+          if (u.userId === userId) {
+            u.customStatus = clean;
+          }
+        }
+        io.emit("online_users", getOnlineList());
+      } catch (err) {}
+    });
+
+    // Calling signaling (Voice and Video)
+    socket.on("call_user", ({ toUserId, toUsername, room, type }) => {
+      // Direct call
+      if (toUserId) {
+        for (const [sId, u] of onlineUsers) {
+          if (u.userId === toUserId) {
+            io.to(sId).emit("incoming_call", {
+              fromUserId: userId,
+              fromUsername: username,
+              type: type || "voice",
+              room,
+            });
+          }
+        }
+      } else if (room) {
+        socket.to(room).emit("incoming_call", {
+          fromUserId: userId,
+          fromUsername: username,
+          type: type || "voice",
+          room,
+        });
+      }
+    });
+
+    socket.on("call_response", ({ toUserId, action, room }) => {
+      // action: "accepted" | "rejected" | "ended"
+      for (const [sId, u] of onlineUsers) {
+        if (u.userId === toUserId) {
+          io.to(sId).emit("call_status", { fromUserId: userId, fromUsername: username, action, room });
+        }
+      }
+      if (room) {
+        socket.to(room).emit("call_status", { fromUserId: userId, fromUsername: username, action, room });
       }
     });
 
     // Moderate User (Kick, Mute with durations, Blacklist / Ban)
     socket.on("moderate_user", async ({ targetUserId, targetUsername, action, room, durationMinutes }) => {
-      // Caller must be Admin or Room Creator
       const callerIsAdmin = isAdmin || ["admin", "wana"].includes((username || "").toLowerCase());
       let isRoomCreator = false;
 
@@ -164,7 +349,6 @@ module.exports = (io) => {
         return;
       }
 
-      // Cannot moderate master admin accounts
       if (["admin"].includes((targetUsername || "").toLowerCase()) && (username || "").toLowerCase() !== "admin") {
         socket.emit("error", { message: "Cannot moderate master administrator accounts." });
         return;
@@ -206,15 +390,11 @@ module.exports = (io) => {
           const until = durationMinutes ? new Date(Date.now() + durationMinutes * 60 * 1000) : null;
           await Room.findOneAndUpdate(
             { name: room },
-            {
-              $pull: { mutedUsers: { username: targetUsername } },
-            }
+            { $pull: { mutedUsers: { username: targetUsername } } }
           );
           await Room.findOneAndUpdate(
             { name: room },
-            {
-              $push: { mutedUsers: { userId: targetUserId, username: targetUsername, until, mutedAt: new Date() } },
-            }
+            { $push: { mutedUsers: { userId: targetUserId, username: targetUsername, until, mutedAt: new Date() } } }
           );
 
           const durationText = durationMinutes ? `${durationMinutes}m` : "permanently";
@@ -346,10 +526,16 @@ module.exports = (io) => {
   function getOnlineList() {
     const seen = new Set();
     const list = [];
-    for (const { userId, username, isAdmin } of onlineUsers.values()) {
+    for (const { userId, username, isAdmin, customStatus, avatar } of onlineUsers.values()) {
       if (!seen.has(userId)) {
         seen.add(userId);
-        list.push({ userId, username, isAdmin: !!isAdmin });
+        list.push({
+          userId,
+          username,
+          isAdmin: !!isAdmin,
+          customStatus: customStatus || "Exploring the community ✨",
+          avatar: avatar || null,
+        });
       }
     }
     return list;

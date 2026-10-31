@@ -33,11 +33,12 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
-  maxHttpBufferSize: 1e6, // 1MB buffer limit to prevent socket overflow
+  maxHttpBufferSize: 1e7, // 10MB buffer limit for media attachments and voice clips
 });
 
 app.use(cors({ origin: "*", credentials: true }));
-app.use(express.json({ limit: "50kb" })); // Prevents large payload DoS
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Routes with security limits
 app.use("/api/auth", authLimiter, require("./routes/auth"));

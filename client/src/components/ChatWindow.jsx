@@ -5,6 +5,8 @@ import { useAuth } from "../context/AuthContext";
 import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
+import MemberListDrawer from "./MemberListDrawer";
+import CallScreenModal from "./CallScreenModal";
 import api from "../utils/api";
 
 export default function ChatWindow({
@@ -12,15 +14,22 @@ export default function ChatWindow({
   activeDM,
   onBack,
   onToggleSidebar,
-  sidebarOpen,
   onUserContextMenu,
   onRoomBlocked,
+  onSelectDM,
 }) {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(true);
   const [typers, setTypers] = useState([]);
   const [notice, setNotice] = useState("");
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(null);
+  const [showMemberList, setShowMemberList] = useState(false);
+  const [activeCall, setActiveCall] = useState(null); // { type: 'voice'|'video', target }
+  const [searchInChat, setSearchInChat] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
   const bottomRef = useRef(null);
 
   const currentUserId = user?.id || user?._id || "";
@@ -30,20 +39,21 @@ export default function ChatWindow({
     ? `dm_${[currentUserId, activeDM.userId || activeDM.id || ""].sort().join("_")}`
     : activeRoom?.name || "global";
 
-  // Helper: Strictly check if this tab is active, focused and visible to the user
+  // Check if active tab is visible and focused
   const isTabActiveAndVisible = useCallback(() => {
     if (typeof document === "undefined") return false;
-    // 1. Must be visible (not minimized, not a background/inactive tab)
     if (document.visibilityState !== "visible") return false;
-    // 2. Must have active window focus
     if (typeof document.hasFocus === "function" && !document.hasFocus()) return false;
     return true;
   }, []);
 
-  // Load history
+  // Fetch Message History
   useEffect(() => {
     setMessages([]);
     setTypers([]);
+    setReplyingTo(null);
+    setEditingMessage(null);
+    setIsLoadingMessages(true);
 
     const fetchHistory = async () => {
       try {
@@ -53,20 +63,22 @@ export default function ChatWindow({
         } else {
           res = await api.get(`/rooms/${currentRoom}/messages`);
         }
-        setMessages(res.data);
-        // Only mark seen if the user is actively viewing this tab right now!
+        setMessages(res.data || []);
         if (socket && isTabActiveAndVisible()) {
           socket.emit("mark_seen", { room: currentRoom });
         }
-      } catch {}
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+      } finally {
+        setIsLoadingMessages(false);
+      }
     };
     fetchHistory();
   }, [currentRoom, socket, activeDM, isTabActiveAndVisible]);
 
-  // When user switches back to this tab or focuses the window, mark messages as seen!
+  // Window Focus & Seen Tracking
   useEffect(() => {
     if (!socket) return;
-
     const handleActive = () => {
       if (document.visibilityState === "visible") {
         socket.emit("mark_seen", { room: currentRoom });
@@ -84,7 +96,7 @@ export default function ChatWindow({
     };
   }, [socket, currentRoom]);
 
-  // Join room via socket & listen for events
+  // Socket Event Listeners
   useEffect(() => {
     if (!socket) return;
     socket.emit("join_room", { room: currentRoom });
@@ -94,7 +106,6 @@ export default function ChatWindow({
         if (prev.find((m) => m._id === msg._id)) return prev;
         return [...prev, msg];
       });
-      // ONLY mark as seen if tab is actively focused and visible!
       if (msg.senderName !== currentUsername && isTabActiveAndVisible()) {
         socket.emit("mark_seen", { room: currentRoom });
       }
@@ -106,11 +117,32 @@ export default function ChatWindow({
           if (prev.find((m) => m._id === msg._id)) return prev;
           return [...prev, msg];
         });
-        // ONLY mark as seen if tab is actively focused and visible!
         if (msg.senderName !== currentUsername && isTabActiveAndVisible()) {
           socket.emit("mark_seen", { room: currentRoom });
         }
       }
+    };
+
+    const onMsgEdited = (editedMsg) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === editedMsg._id ? editedMsg : m))
+      );
+    };
+
+    const onMsgDeleted = ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m._id === messageId
+            ? { ...m, isDeleted: true, content: "This message was deleted.", attachment: null }
+            : m
+        )
+      );
+    };
+
+    const onMsgReacted = ({ messageId, reactions }) => {
+      setMessages((prev) =>
+        prev.map((m) => (m._id === messageId ? { ...m, reactions } : m))
+      );
     };
 
     const onMessagesSeen = ({ room, userId: seenUserId, username: seenUsername }) => {
@@ -141,6 +173,13 @@ export default function ChatWindow({
       );
     };
 
+    const onIncomingCall = (callData) => {
+      setActiveCall({
+        type: callData.type || "voice",
+        target: { username: callData.fromUsername, userId: callData.fromUserId },
+      });
+    };
+
     const onKicked = ({ room, message }) => {
       if (room === currentRoom) {
         alert(message || "You have been kicked from this room.");
@@ -153,29 +192,32 @@ export default function ChatWindow({
       setTimeout(() => setNotice(""), 6000);
     };
 
-    const onError = ({ message }) => {
-      setNotice(message);
-      setTimeout(() => setNotice(""), 5000);
-    };
-
     socket.on("new_message", onNewMsg);
     socket.on("new_dm", onNewDM);
+    socket.on("message_edited", onMsgEdited);
+    socket.on("message_deleted", onMsgDeleted);
+    socket.on("message_reacted", onMsgReacted);
     socket.on("messages_seen", onMessagesSeen);
     socket.on("user_typing", onTyping);
+    socket.on("incoming_call", onIncomingCall);
     socket.on("kicked_from_room", onKicked);
     socket.on("moderation_notice", onNotice);
     socket.on("moderation_alert", onNotice);
-    socket.on("error", onError);
+    socket.on("error", onNotice);
 
     return () => {
       socket.off("new_message", onNewMsg);
       socket.off("new_dm", onNewDM);
+      socket.off("message_edited", onMsgEdited);
+      socket.off("message_deleted", onMsgDeleted);
+      socket.off("message_reacted", onMsgReacted);
       socket.off("messages_seen", onMessagesSeen);
       socket.off("user_typing", onTyping);
+      socket.off("incoming_call", onIncomingCall);
       socket.off("kicked_from_room", onKicked);
       socket.off("moderation_notice", onNotice);
       socket.off("moderation_alert", onNotice);
-      socket.off("error", onError);
+      socket.off("error", onNotice);
     };
   }, [socket, currentRoom, currentUsername, isTabActiveAndVisible]);
 
@@ -184,137 +226,363 @@ export default function ChatWindow({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typers]);
 
-  const handleSend = useCallback((content) => {
+  // Send Message
+  const handleSend = useCallback(
+    ({ content, attachment }) => {
+      if (!socket) return;
+      const replyData = replyingTo
+        ? {
+            messageId: replyingTo._id,
+            senderName: replyingTo.senderName,
+            content: replyingTo.content,
+          }
+        : null;
+
+      if (activeDM) {
+        socket.emit("send_dm", {
+          toUserId: activeDM.userId,
+          toUsername: activeDM.username,
+          content,
+          replyTo: replyData,
+          attachment,
+        });
+      } else {
+        socket.emit("send_message", {
+          room: currentRoom,
+          content,
+          replyTo: replyData,
+          attachment,
+        });
+      }
+      setReplyingTo(null);
+    },
+    [socket, activeDM, currentRoom, replyingTo]
+  );
+
+  const handleTyping = useCallback(
+    (isTyping) => {
+      socket?.emit("typing", { room: currentRoom, isTyping });
+    },
+    [socket, currentRoom]
+  );
+
+  // Edit Message
+  const handleSaveEdit = (messageId, newContent) => {
+    if (!socket || !newContent.trim()) return;
+    socket.emit("edit_message", { messageId, newContent, room: currentRoom });
+    setEditingMessage(null);
+  };
+
+  // Delete Message
+  const handleDelete = (messageId) => {
+    if (!socket || !confirm("Delete this message?")) return;
+    socket.emit("delete_message", { messageId, room: currentRoom });
+  };
+
+  // React to Message
+  const handleReact = (messageId, emoji) => {
     if (!socket) return;
-    if (activeDM) {
-      socket.emit("send_dm", { toUserId: activeDM.userId, toUsername: activeDM.username, content });
-    } else {
-      socket.emit("send_message", { room: currentRoom, content });
-    }
-  }, [socket, activeDM, currentRoom]);
+    socket.emit("react_message", { messageId, emoji, room: currentRoom });
+  };
 
-  const handleTyping = useCallback((isTyping) => {
-    socket?.emit("typing", { room: currentRoom, isTyping });
-  }, [socket, currentRoom]);
+  const title = activeDM
+    ? `@${activeDM.username}`
+    : activeRoom?.name === "global"
+    ? "global"
+    : activeRoom?.name || "global";
+  const subtitle = activeDM
+    ? activeDM.customStatus || "Direct Message"
+    : activeRoom?.description || "Public Channel";
 
-  const title = activeDM ? `@${activeDM.username}` : (activeRoom?.name === "global" ? "global" : activeRoom?.name || "global");
-  const subtitle = activeDM ? "Direct Conversation" : (activeRoom?.description || "Public Channel");
+  const displayMessages = searchInChat
+    ? messages.filter((m) =>
+        m.content?.toLowerCase().includes(searchInChat.toLowerCase())
+      )
+    : messages;
 
   return (
-    <div className="flex flex-col h-full bg-slate-900/20 backdrop-blur-md select-text overflow-hidden">
-      {/* Frosted Glass Header */}
-      <div className="flex-shrink-0 flex items-center gap-3 px-4 py-3.5 border-b border-white/10 bg-slate-900/50 backdrop-blur-xl z-10">
-        {(onBack || onToggleSidebar) && (
-          <button
-            type="button"
-            onClick={onBack || onToggleSidebar}
-            className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/[0.06] text-slate-300 hover:text-white transition-colors mr-0.5 border border-white/10"
-            title="Channels & Members"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-            </svg>
-          </button>
-        )}
+    <div className="flex h-full w-full bg-slate-900/20 backdrop-blur-md select-text overflow-hidden relative">
+      {/* Main Chat Column */}
+      <div className="flex-1 flex flex-col h-full min-w-0">
+        {/* Header */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-white/10 bg-slate-900/60 backdrop-blur-xl z-10">
+          <div className="flex items-center gap-3 min-w-0">
+            {(onBack || onToggleSidebar) && (
+              <button
+                type="button"
+                onClick={onBack || onToggleSidebar}
+                className="flex items-center justify-center w-8 h-8 rounded-xl bg-white/[0.06] text-slate-300 hover:text-white transition-colors border border-white/10 md:hidden"
+                title="Back to Conversations"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                </svg>
+              </button>
+            )}
 
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-cyan-500 border border-white/20 flex items-center justify-center text-xs font-bold text-white shadow-sm flex-shrink-0">
-          {activeDM ? (
-            activeDM.username?.[0]?.toUpperCase()
-          ) : (
-            <span className="text-white text-sm font-semibold">#</span>
-          )}
-        </div>
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-500 to-cyan-500 border border-white/20 flex items-center justify-center text-sm font-bold text-white shadow-sm flex-shrink-0">
+              {activeDM ? activeDM.username?.[0]?.toUpperCase() : "#"}
+            </div>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="font-bold text-white text-sm tracking-tight truncate leading-tight drop-shadow-sm">
-              {title}
-            </h2>
-            {activeDM && (
-              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] flex-shrink-0" title="Online" />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-[var(--text-main)] text-sm tracking-tight truncate leading-tight">
+                  {title}
+                </h2>
+                {activeDM && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] flex-shrink-0" title="Online" />
+                )}
+              </div>
+              <p className="text-[11px] text-[var(--text-muted)] truncate mt-0.5">
+                {subtitle}
+              </p>
+            </div>
+          </div>
+
+          {/* Header Action Buttons (Voice Call, Video Call, Search, Members) */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* Search Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowSearch(!showSearch)}
+              className={`p-2 rounded-xl transition-colors ${
+                showSearch
+                  ? "bg-indigo-600/30 text-indigo-300 border border-indigo-400/40"
+                  : "text-[var(--text-muted)] hover:text-white hover:bg-white/10"
+              }`}
+              title="Search in this chat"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+            </button>
+
+            {/* Voice Call Button */}
+            <button
+              type="button"
+              onClick={() =>
+                setActiveCall({
+                  type: "voice",
+                  target: activeDM || { username: activeRoom?.name || "Global Room" },
+                })
+              }
+              className="p-2 rounded-xl text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+              title="Start Voice Call"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" />
+              </svg>
+            </button>
+
+            {/* Video Call Button */}
+            <button
+              type="button"
+              onClick={() =>
+                setActiveCall({
+                  type: "video",
+                  target: activeDM || { username: activeRoom?.name || "Global Room" },
+                })
+              }
+              className="p-2 rounded-xl text-[var(--text-muted)] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+              title="Start Video Call"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+              </svg>
+            </button>
+
+            {/* Member List Toggle (For Channels) */}
+            {!activeDM && (
+              <button
+                type="button"
+                onClick={() => setShowMemberList(!showMemberList)}
+                className={`p-2 rounded-xl transition-colors ${
+                  showMemberList
+                    ? "bg-indigo-600 text-white"
+                    : "text-[var(--text-muted)] hover:text-white hover:bg-white/10"
+                }`}
+                title="Toggle Room Members"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.999-3.199a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+                </svg>
+              </button>
             )}
           </div>
-          <p className="text-[11px] text-slate-400 truncate mt-0.5 font-normal">
-            {subtitle}
-          </p>
+        </div>
+
+        {/* In-Chat Search Bar */}
+        <AnimatePresence>
+          {showSearch && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="px-4 py-2 bg-slate-900/80 border-b border-white/10 flex items-center gap-2 overflow-hidden"
+            >
+              <input
+                type="text"
+                value={searchInChat}
+                onChange={(e) => setSearchInChat(e.target.value)}
+                placeholder="Search messages in this conversation..."
+                className="flex-1 bg-white/[0.06] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-[var(--text-main)] placeholder-[var(--text-muted)] focus:outline-none focus:border-indigo-500"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInChat("");
+                  setShowSearch(false);
+                }}
+                className="text-xs text-[var(--text-muted)] hover:text-white px-2 py-1"
+              >
+                Done
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Moderation / Error Notice Banner */}
+        <AnimatePresence>
+          {notice && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-200 flex justify-between items-center z-10 font-medium"
+            >
+              <span>⚠️ {notice}</span>
+              <button
+                type="button"
+                onClick={() => setNotice("")}
+                className="text-amber-400 hover:text-white font-bold ml-2"
+              >
+                ✕
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Message Stream */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-0.5">
+          {/* Skeleton Loaders While Loading History */}
+          {isLoadingMessages && (
+            <div className="space-y-4 py-6">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className={`flex gap-3 max-w-[70%] animate-pulse ${
+                    i % 2 === 0 ? "ml-auto flex-row-reverse" : ""
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-white/10 flex-shrink-0" />
+                  <div className="space-y-2 flex-1">
+                    <div className="h-4 rounded-xl bg-white/10 w-28" />
+                    <div className="h-10 rounded-2xl bg-white/5 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Friendly Empty State */}
+          {!isLoadingMessages && displayMessages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)] py-12 select-none">
+              <div className="w-16 h-16 rounded-3xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-3 shadow-[0_0_30px_rgba(99,102,241,0.2)]">
+                <span className="text-2xl">👋</span>
+              </div>
+              <p className="text-sm font-bold text-[var(--text-main)]">
+                No messages yet, say hi!
+              </p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Be the first to start the conversation in {title}.
+              </p>
+            </div>
+          )}
+
+          {/* Render Messages with Consecutive Grouping */}
+          {!isLoadingMessages &&
+            displayMessages.map((msg, index) => {
+              const isOwn = msg.senderName === currentUsername;
+
+              // Check if consecutive from same sender within 2 minutes
+              const prevMsg = index > 0 ? displayMessages[index - 1] : null;
+              const isConsecutive =
+                prevMsg &&
+                prevMsg.senderName === msg.senderName &&
+                new Date(msg.createdAt) - new Date(prevMsg.createdAt) < 2 * 60 * 1000;
+
+              // Seen receipts for the last message
+              const isLastMessage = index === displayMessages.length - 1;
+              const activeSeenBy = [];
+              if (isLastMessage && Array.isArray(msg.seenBy)) {
+                const seenSet = new Set();
+                for (const reader of msg.seenBy) {
+                  const uName = reader.username || reader.userId;
+                  if (uName && uName !== msg.senderName && !seenSet.has(uName)) {
+                    seenSet.add(uName);
+                    activeSeenBy.push(reader);
+                  }
+                }
+              }
+
+              return (
+                <MessageBubble
+                  key={msg._id}
+                  msg={msg}
+                  isOwn={isOwn}
+                  isConsecutive={isConsecutive}
+                  seenBy={activeSeenBy}
+                  onUserContextMenu={onUserContextMenu}
+                  onReply={(targetMsg) => setReplyingTo(targetMsg)}
+                  onEdit={(targetMsg) => setEditingMessage(targetMsg)}
+                  onDelete={handleDelete}
+                  onReact={handleReact}
+                  currentUsername={currentUsername}
+                />
+              );
+            })}
+
+          <TypingIndicator typers={typers} />
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Pinned Input Dock */}
+        <div className="flex-shrink-0">
+          <MessageInput
+            onSend={handleSend}
+            onTyping={handleTyping}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            editingMessage={editingMessage}
+            onCancelEdit={() => setEditingMessage(null)}
+            onSaveEdit={handleSaveEdit}
+          />
         </div>
       </div>
 
-      {/* Moderation / Error Notice Banner */}
+      {/* Group Chat Member List Drawer */}
       <AnimatePresence>
-        {notice && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="bg-amber-500/20 border-b border-amber-500/30 px-4 py-2 text-xs text-amber-200 flex justify-between items-center z-10 font-medium"
-          >
-            <span>⚠️ {notice}</span>
-            <button
-              type="button"
-              onClick={() => setNotice("")}
-              className="text-amber-400 hover:text-white font-bold ml-2"
-            >
-              ✕
-            </button>
-          </motion.div>
+        {showMemberList && !activeDM && (
+          <MemberListDrawer
+            isOpen={showMemberList}
+            onClose={() => setShowMemberList(false)}
+            activeRoom={activeRoom}
+            onSelectDM={onSelectDM}
+            onUserContextMenu={onUserContextMenu}
+          />
         )}
       </AnimatePresence>
 
-      {/* Message Stream */}
-      <motion.div
-        key={`messages-${currentRoom}`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.15 }}
-        className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-1"
-      >
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12 select-none">
-            <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/10 flex items-center justify-center text-indigo-400 mb-3 shadow-glass">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a.75.75 0 01-.774-.974 4.545 4.545 0 00.41-1.385C3.398 16.924 3 14.568 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z" />
-              </svg>
-            </div>
-            <p className="text-sm font-semibold text-white">No messages here yet</p>
-            <p className="text-xs text-slate-400 mt-1">Start chatting by typing below!</p>
-          </div>
+      {/* Voice and Video Call Screen Overlay */}
+      <AnimatePresence>
+        {activeCall && (
+          <CallScreenModal
+            target={activeCall.target}
+            type={activeCall.type}
+            onClose={() => setActiveCall(null)}
+          />
         )}
-
-        {messages.map((msg, index) => {
-          // STRICT RULE: ONLY the literal LAST message in the conversation displays seen receipts!
-          const isLastMessage = index === messages.length - 1;
-          const activeSeenBy = [];
-          if (isLastMessage && Array.isArray(msg.seenBy)) {
-            const seenSet = new Set();
-            for (const reader of msg.seenBy) {
-              const uName = reader.username || reader.userId;
-              if (uName && uName !== msg.senderName && !seenSet.has(uName)) {
-                seenSet.add(uName);
-                activeSeenBy.push(reader);
-              }
-            }
-          }
-
-          return (
-            <MessageBubble
-              key={msg._id}
-              msg={msg}
-              isOwn={msg.senderName === currentUsername}
-              seenBy={activeSeenBy}
-              onUserContextMenu={onUserContextMenu}
-            />
-          );
-        })}
-
-        <TypingIndicator typers={typers} />
-        <div ref={bottomRef} />
-      </motion.div>
-
-      {/* Pinned Input Dock */}
-      <div className="flex-shrink-0">
-        <MessageInput onSend={handleSend} onTyping={handleTyping} />
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

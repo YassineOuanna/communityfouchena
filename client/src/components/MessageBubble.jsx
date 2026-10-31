@@ -1,7 +1,6 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Helper to generate consistent, vibrant avatar gradient colors based on username
 function getAvatarGradient(name = "") {
   const gradients = [
     "from-indigo-500 to-purple-600",
@@ -19,21 +18,55 @@ function getAvatarGradient(name = "") {
   return gradients[index];
 }
 
-export default function MessageBubble({ msg, isOwn, seenBy = [], onUserContextMenu }) {
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+export default function MessageBubble({
+  msg,
+  isOwn,
+  isConsecutive = false,
+  seenBy = [],
+  onUserContextMenu,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact,
+  currentUsername,
+}) {
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const audioRef = useRef(null);
+
   const time = new Date(msg.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
 
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (isPlayingAudio) {
+      audioRef.current.pause();
+      setIsPlayingAudio(false);
+    } else {
+      audioRef.current.play();
+      setIsPlayingAudio(true);
+    }
+  };
+
+  const handleAudioEnded = () => {
+    setIsPlayingAudio(false);
+  };
+
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15, ease: "easeOut" }}
-      className={`flex flex-col mb-3 px-1 ${isOwn ? "items-end" : "items-start"}`}
+      transition={{ duration: 0.12, ease: "easeOut" }}
+      className={`relative group/msg flex flex-col px-1 ${
+        isConsecutive ? "mt-1" : "mt-3.5"
+      } ${isOwn ? "items-end" : "items-start"}`}
     >
-      {/* Sender Name for incoming messages */}
-      {!isOwn && (
+      {/* Sender Name (only on first message in a consecutive group) */}
+      {!isOwn && !isConsecutive && (
         <span
           onContextMenu={(e) => {
             e.preventDefault();
@@ -46,161 +79,298 @@ export default function MessageBubble({ msg, isOwn, seenBy = [], onUserContextMe
             onUserContextMenu &&
               onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
           }}
-          className="text-[11px] font-semibold text-slate-300 mb-1 ml-10 cursor-pointer hover:text-indigo-300 transition-colors"
+          className="text-[11px] font-semibold text-[var(--text-muted)] mb-1 ml-11 cursor-pointer hover:text-indigo-400 transition-colors"
           title="Click or right-click for options"
         >
           {msg.senderName}
         </span>
       )}
 
-      {/* Row: Sender Profile Pic & Message Bubble locked at the exact same horizontal level */}
+      {/* Row: Profile Pic & Message Bubble */}
       <div
-        className={`relative group/bubble flex items-end gap-2 max-w-[85%] sm:max-w-[75%] ${
+        className={`relative flex items-end gap-2 max-w-[85%] sm:max-w-[70%] ${
           isOwn ? "flex-row-reverse" : "flex-row"
         }`}
       >
-        {/* Sender Profile Avatar */}
-        <div
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onUserContextMenu &&
-              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            onUserContextMenu &&
-              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
-          }}
-          className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold select-none shadow-sm cursor-pointer hover:scale-105 transition-transform ${
-            isOwn
-              ? "bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white border border-white/20"
-              : "bg-white/[0.08] border border-white/10 text-slate-200"
-          }`}
-          title={`${msg.senderName} (Click or right-click for options)`}
-        >
-          {msg.senderName?.[0]?.toUpperCase() || "?"}
-        </div>
-
-        {/* Message Bubble with Right-Click Support */}
-        <div
-          onContextMenu={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onUserContextMenu &&
-              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
-          }}
-          className={`px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed break-words shadow-sm backdrop-blur-md cursor-pointer ${
-            isOwn
-              ? "bg-gradient-to-r from-indigo-600/90 to-indigo-500/90 border border-indigo-400/30 text-white rounded-br-xs shadow-bubble"
-              : "bg-white/[0.06] border border-white/10 text-slate-100 rounded-bl-xs hover:border-white/20"
-          }`}
-          title="Right-click for options, mute, kick & blacklist"
-        >
-          {msg.content}
-        </div>
-
-        {/* 3-Dots Quick Action Button on Hover */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onUserContextMenu &&
-              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
-          }}
-          className="opacity-0 group-hover/bubble:opacity-100 transition-opacity w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-xs flex-shrink-0 mb-1 cursor-pointer"
-          title="User Options & Moderation"
-        >
-          ⋮
-        </button>
-      </div>
-
-      {/* Timestamp & Seen Receipt Status Bar: Clean horizontal row directly aligned below bubble */}
-      <div
-        className={`flex items-center gap-1.5 mt-1 select-none ${
-          isOwn ? "justify-end mr-10" : "justify-start ml-10"
-        }`}
-      >
-        <span className="text-[10.5px] text-slate-400 font-normal">{time}</span>
-
-        {/* For Own Messages: If seen, show viewer avatar(s); otherwise show delivered checkmark */}
-        {isOwn && (
-          <>
-            {seenBy && seenBy.length > 0 ? (
+        {/* Profile Avatar (only shown if not consecutive) */}
+        {!isOwn && (
+          <div className="w-8 flex-shrink-0 flex items-end">
+            {!isConsecutive ? (
               <div
-                className="flex items-center -space-x-1.5 select-none ml-1"
-                title={`Seen by ${seenBy.map((r) => r.username).join(", ")}`}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onUserContextMenu &&
+                    onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUserContextMenu &&
+                    onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+                }}
+                className={`w-8 h-8 rounded-full bg-gradient-to-tr ${getAvatarGradient(
+                  msg.senderName
+                )} flex items-center justify-center text-xs font-bold text-white shadow-sm border border-white/20 cursor-pointer hover:scale-105 transition-transform`}
+                title={`${msg.senderName} (Click for options)`}
               >
-                <AnimatePresence>
-                  {seenBy.slice(0, 5).map((reader) => (
-                    <motion.div
-                      key={reader.userId || reader.username}
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                      className={`w-[18px] h-[18px] rounded-full bg-gradient-to-tr ${getAvatarGradient(
-                        reader.username
-                      )} ring-2 ring-slate-900 border border-white/20 flex items-center justify-center text-[9px] font-bold text-white shadow-sm cursor-pointer hover:scale-125 hover:z-20 transition-all leading-none`}
-                      title={`Seen by ${reader.username}`}
-                    >
-                      {reader.username?.[0]?.toUpperCase()}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-
-                {seenBy.length > 5 && (
-                  <div
-                    className="w-[18px] h-[18px] rounded-full bg-slate-800 ring-2 ring-slate-900 border border-white/20 flex items-center justify-center text-[8px] font-bold text-slate-300 shadow-sm leading-none"
-                    title={`And ${seenBy.length - 5} others`}
-                  >
-                    +{seenBy.length - 5}
-                  </div>
-                )}
+                {msg.senderName?.[0]?.toUpperCase() || "?"}
               </div>
             ) : (
-              <span className="text-[11px] text-slate-400 font-medium ml-0.5" title="Delivered">
-                ✓
-              </span>
+              <div className="w-8" />
             )}
-          </>
+          </div>
         )}
 
-        {/* For Incoming Messages: Display other members who also saw this last message */}
-        {!isOwn && seenBy && seenBy.length > 0 && (
-          <div
-            className="flex items-center -space-x-1.5 select-none ml-1"
-            title={`Seen by ${seenBy.map((r) => r.username).join(", ")}`}
-          >
-            <AnimatePresence>
-              {seenBy.slice(0, 5).map((reader) => (
-                <motion.div
-                  key={reader.userId || reader.username}
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                  className={`w-[18px] h-[18px] rounded-full bg-gradient-to-tr ${getAvatarGradient(
-                    reader.username
-                  )} ring-2 ring-slate-900 border border-white/20 flex items-center justify-center text-[9px] font-bold text-white shadow-sm cursor-pointer hover:scale-125 hover:z-20 transition-all leading-none`}
-                  title={`Seen by ${reader.username}`}
-                >
-                  {reader.username?.[0]?.toUpperCase()}
-                </motion.div>
-              ))}
-            </AnimatePresence>
+        {/* Message Bubble Box */}
+        <div
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onUserContextMenu &&
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
+          className={`relative px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed break-words shadow-sm transition-all select-text ${
+            isOwn
+              ? "bg-gradient-to-r from-indigo-600 to-indigo-500 text-white rounded-br-xs shadow-bubble"
+              : "bg-[var(--neutral-bubble)] text-[var(--text-main)] rounded-bl-xs border border-white/10"
+          } ${msg.isDeleted ? "italic opacity-60" : ""}`}
+        >
+          {/* Quoted Reply Banner if this message replied to someone */}
+          {msg.replyTo && (
+            <div
+              className={`mb-2 px-2.5 py-1.5 rounded-xl border-l-2 text-xs flex flex-col gap-0.5 ${
+                isOwn
+                  ? "bg-black/20 border-white/60 text-white/90"
+                  : "bg-black/10 dark:bg-white/5 border-indigo-400 text-[var(--text-main)]"
+              }`}
+            >
+              <span className="font-bold text-[10px] text-indigo-300">
+                Replying to @{msg.replyTo.senderName}
+              </span>
+              <span className="truncate max-w-[240px] text-[11px] opacity-80">
+                {msg.replyTo.content}
+              </span>
+            </div>
+          )}
 
-            {seenBy.length > 5 && (
-              <div
-                className="w-[18px] h-[18px] rounded-full bg-slate-800 ring-2 ring-slate-900 border border-white/20 flex items-center justify-center text-[8px] font-bold text-slate-300 shadow-sm leading-none"
-                title={`And ${seenBy.length - 5} others`}
+          {/* Image Attachment Preview */}
+          {msg.attachment?.fileType === "image" && (
+            <div className="mb-2 rounded-xl overflow-hidden cursor-pointer">
+              <img
+                src={msg.attachment.url}
+                alt="Uploaded media"
+                onClick={() => setShowImageModal(true)}
+                className="max-h-60 max-w-full rounded-xl object-cover hover:brightness-105 transition-all"
+                loading="lazy"
+              />
+            </div>
+          )}
+
+          {/* Voice Note Audio Attachment */}
+          {msg.attachment?.fileType === "audio" && (
+            <div className="mb-2 p-2 rounded-xl bg-black/20 flex items-center gap-3 min-w-[200px]">
+              <audio
+                ref={audioRef}
+                src={msg.attachment.url}
+                onEnded={handleAudioEnded}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={toggleAudio}
+                className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center flex-shrink-0 transition-transform active:scale-95"
               >
-                +{seenBy.length - 5}
+                {isPlayingAudio ? "⏸" : "▶"}
+              </button>
+
+              {/* Waveform graphic */}
+              <div className="flex-1 flex items-center gap-1 h-6">
+                {[14, 22, 10, 18, 26, 12, 20, 16, 24, 8, 14, 20, 12].map((height, i) => (
+                  <div
+                    key={i}
+                    style={{ height: `${height}px` }}
+                    className={`w-1 rounded-full transition-all ${
+                      isPlayingAudio ? "bg-cyan-300 animate-pulse" : "bg-white/40"
+                    }`}
+                  />
+                ))}
               </div>
+
+              <span className="text-[10px] text-white/80 font-mono">
+                {msg.attachment.duration ? `${msg.attachment.duration}s` : "Voice"}
+              </span>
+            </div>
+          )}
+
+          {/* Regular File Attachment */}
+          {msg.attachment?.fileType === "file" && (
+            <a
+              href={msg.attachment.url}
+              download={msg.attachment.fileName}
+              className="mb-2 p-2.5 rounded-xl bg-black/20 hover:bg-black/30 flex items-center gap-2.5 text-xs text-white transition-colors"
+            >
+              <span className="text-base">📎</span>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold truncate">{msg.attachment.fileName}</p>
+                <p className="text-[10px] text-white/70">
+                  {msg.attachment.fileSize
+                    ? `${(msg.attachment.fileSize / 1024).toFixed(1)} KB`
+                    : "File attachment"}
+                </p>
+              </div>
+            </a>
+          )}
+
+          {/* Message Text Content */}
+          <div className="whitespace-pre-wrap">{msg.content}</div>
+
+          {/* Edited indicator */}
+          {msg.isEdited && !msg.isDeleted && (
+            <span className="text-[10px] opacity-70 ml-1.5">(edited)</span>
+          )}
+        </div>
+
+        {/* Hover Action Menu Bar (Quick Reactions, Reply, Edit, Delete) */}
+        {!msg.isDeleted && (
+          <div
+            className={`opacity-0 group-hover/msg:opacity-100 transition-opacity absolute -top-4 z-20 flex items-center gap-0.5 bg-slate-900/95 border border-white/15 px-1.5 py-0.5 rounded-full shadow-lg backdrop-blur-md ${
+              isOwn ? "right-1" : "left-11"
+            }`}
+          >
+            {/* Quick emoji reactions */}
+            {QUICK_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => onReact && onReact(msg._id, emoji)}
+                className="w-6 h-6 flex items-center justify-center text-xs hover:scale-125 transition-transform"
+                title={`React with ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+
+            <div className="w-[1px] h-3 bg-white/20 mx-0.5" />
+
+            {/* Reply Button */}
+            <button
+              type="button"
+              onClick={() => onReply && onReply(msg)}
+              className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white transition-colors text-xs"
+              title="Reply to message"
+            >
+              ↩
+            </button>
+
+            {/* Edit Button (if own) */}
+            {isOwn && onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(msg)}
+                className="w-6 h-6 flex items-center justify-center text-slate-300 hover:text-white transition-colors text-xs"
+                title="Edit message"
+              >
+                ✎
+              </button>
+            )}
+
+            {/* Delete Button */}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(msg._id)}
+                className="w-6 h-6 flex items-center justify-center text-rose-400 hover:text-rose-300 transition-colors text-xs"
+                title="Delete message"
+              >
+                🗑
+              </button>
             )}
           </div>
         )}
       </div>
+
+      {/* Emoji Reactions Pills */}
+      {msg.reactions && msg.reactions.length > 0 && (
+        <div
+          className={`flex flex-wrap gap-1 mt-1 ${
+            isOwn ? "mr-1 justify-end" : "ml-11 justify-start"
+          }`}
+        >
+          {msg.reactions.map((r) => {
+            const hasReacted = r.users?.some(
+              (u) => u.username === currentUsername
+            );
+            return (
+              <button
+                key={r.emoji}
+                type="button"
+                onClick={() => onReact && onReact(msg._id, r.emoji)}
+                className={`px-2 py-0.5 rounded-full text-xs flex items-center gap-1 border transition-all ${
+                  hasReacted
+                    ? "bg-indigo-600/30 border-indigo-400/50 text-indigo-300 shadow-sm"
+                    : "bg-white/[0.05] border-white/10 text-[var(--text-main)] hover:bg-white/[0.1]"
+                }`}
+                title={`Reacted by ${r.users?.map((u) => u.username).join(", ")}`}
+              >
+                <span>{r.emoji}</span>
+                <span className="text-[10px] font-bold">{r.users?.length || 1}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Timestamp & Read Receipts Status Row */}
+      <div
+        className={`flex items-center gap-1.5 mt-0.5 select-none ${
+          isOwn ? "justify-end mr-1" : "justify-start ml-11"
+        }`}
+      >
+        <span className="text-[10px] text-[var(--text-muted)] font-normal">{time}</span>
+
+        {/* Read Receipt & Delivery Status for Own Messages */}
+        {isOwn && (
+          <span className="text-[11px] font-medium ml-0.5" title={seenBy?.length > 0 ? "Seen" : "Delivered"}>
+            {seenBy && seenBy.length > 0 ? (
+              <span className="text-cyan-400 font-bold" title={`Seen by ${seenBy.map((s) => s.username).join(", ")}`}>
+                ✓✓
+              </span>
+            ) : (
+              <span className="text-[var(--text-muted)]">✓✓</span>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* Image Modal for Fullscreen View */}
+      <AnimatePresence>
+        {showImageModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            onClick={() => setShowImageModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl"
+            >
+              <img
+                src={msg.attachment?.url}
+                alt="Enlarged view"
+                className="w-full h-full object-contain rounded-2xl"
+              />
+              <button
+                type="button"
+                onClick={() => setShowImageModal(false)}
+                className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/90"
+              >
+                ✕
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

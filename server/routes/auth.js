@@ -74,6 +74,32 @@ router.post("/login", async (req, res) => {
   }
 });
 
+// GET /api/auth/me
+router.get("/me", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// PUT /api/auth/profile
+router.put("/profile", authMiddleware, async (req, res) => {
+  try {
+    const { customStatus, avatar } = req.body;
+    const updates = {};
+    if (typeof customStatus === "string") updates.customStatus = customStatus.slice(0, 100);
+    if (typeof avatar === "string") updates.avatar = avatar;
+
+    const user = await User.findByIdAndUpdate(req.user.id, { $set: updates }, { new: true }).select("-password");
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+});
+
 // POST /api/auth/change-password
 const authMiddleware = require("../middleware/auth");
 router.post("/change-password", authMiddleware, async (req, res) => {

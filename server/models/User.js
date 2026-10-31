@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  customStatus: {
+    type: String,
+    default: "Exploring the community ✨",
+    maxlength: 100,
+  },
   isAdmin: {
     type: Boolean,
     default: false,

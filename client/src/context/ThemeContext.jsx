@@ -3,9 +3,10 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 const ThemeContext = createContext(null);
 
 export const THEMES = [
-  { id: "midnight", name: "Midnight Aurora", icon: "🌌", description: "Deep navy with ambient glow" },
-  { id: "oled", name: "OLED Black", icon: "🖤", description: "Pure true black contrast" },
-  { id: "slate", name: "Cyber Slate", icon: "🌑", description: "Modern cool graphite" },
+  { id: "midnight", name: "Midnight Aurora", icon: "🌌", description: "Deep navy with ambient glow", isDark: true },
+  { id: "oled", name: "OLED Black", icon: "🖤", description: "Pure true black contrast", isDark: true },
+  { id: "slate", name: "Cyber Slate", icon: "🌑", description: "Modern cool graphite", isDark: true },
+  { id: "light", name: "Crystal Light", icon: "☀️", description: "Crisp light and clean slate", isDark: false },
 ];
 
 export function ThemeProvider({ children }) {
@@ -26,6 +27,11 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "light") {
+      document.documentElement.classList.remove("dark");
+    } else {
+      document.documentElement.classList.add("dark");
+    }
   }, [theme]);
 
   const toggleTheme = () => {
@@ -34,8 +40,10 @@ export function ThemeProvider({ children }) {
     setTheme(nextTheme);
   };
 
+  const currentThemeObj = THEMES.find((t) => t.id === theme) || THEMES[0];
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, themes: THEMES }}>
+    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme, themes: THEMES, isDark: currentThemeObj.isDark }}>
       {children}
     </ThemeContext.Provider>
   );
