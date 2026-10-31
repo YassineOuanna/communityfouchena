@@ -9,12 +9,13 @@ import AdminModal from "./AdminModal";
 import ChangePasswordModal from "./ChangePasswordModal";
 import AdBanner, { AD_CONFIG } from "./AdBanner";
 import api from "../utils/api";
+import { deduplicateRooms, DEFAULT_GLOBAL_ROOM } from "../utils/roomUtils";
 
 export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM, onLogout, onUserContextMenu }) {
   const { onlineUsers = [], isConnected = false } = useSocket() || {};
   const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [rooms, setRooms] = useState([{ name: "global", description: "General community chat" }]);
+  const [rooms, setRooms] = useState([DEFAULT_GLOBAL_ROOM]);
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -22,12 +23,12 @@ export default function Sidebar({ activeRoom, activeDM, onSelectRoom, onSelectDM
 
   useEffect(() => {
     api.get("/rooms").then((res) => {
-      setRooms([{ name: "global", description: "General community chat" }, ...(res.data || [])]);
+      setRooms(deduplicateRooms(res.data));
     }).catch(() => {});
   }, []);
 
   const handleRoomCreated = (room) => {
-    setRooms((prev) => [...prev, room]);
+    setRooms((prev) => deduplicateRooms([...prev, room]));
     onSelectRoom(room);
   };
 

@@ -75,11 +75,20 @@ async function runAttackTests() {
   const totalTests = 9;
 
   try {
-    // Clean up test fixtures
-    await User.deleteMany({ username: { $regex: /^atk_/ } });
-    await BannedIdentifier.deleteMany({ value: { $regex: /atk_/ } });
-    await Room.deleteOne({ name: "atk_room" });
-    await Message.deleteMany({ content: { $regex: /EXPLOIT|AFTER_EXPIRY/ } });
+    // Clean up test fixtures before run
+    const cleanupTestFixtures = async () => {
+      await User.deleteMany({ username: { $regex: /^atk_/i } });
+      await BannedIdentifier.deleteMany({ value: { $regex: /^atk_/i } });
+      await Room.deleteMany({ name: { $regex: /^atk_/i } });
+      await Message.deleteMany({
+        $or: [
+          { senderName: { $regex: /^atk_/i } },
+          { content: { $regex: /EXPLOIT|AFTER_EXPIRY|NORMAL_MESSAGE/i } },
+          { room: { $regex: /^atk_/i } },
+        ],
+      });
+    };
+    await cleanupTestFixtures();
 
     // Ensure Master Admin exists
     let adminUser = await User.findOne({ username: "admin" });
@@ -483,6 +492,8 @@ async function runAttackTests() {
     }
 
     observerSocket.disconnect();
+    await cleanupTestFixtures();
+
     console.log("\n=======================================================");
     console.log(`🎉 ALL ${passedTests}/${totalTests} ATTACK TESTS PASSED!`);
     console.log("=======================================================\n");
@@ -491,6 +502,18 @@ async function runAttackTests() {
     process.exit(0);
   } catch (err) {
     console.error("\n❌ TEST SUITE RUNNER ERROR:", err.message);
+    try {
+      await User.deleteMany({ username: { $regex: /^atk_/i } });
+      await BannedIdentifier.deleteMany({ value: { $regex: /^atk_/i } });
+      await Room.deleteMany({ name: { $regex: /^atk_/i } });
+      await Message.deleteMany({
+        $or: [
+          { senderName: { $regex: /^atk_/i } },
+          { content: { $regex: /EXPLOIT|AFTER_EXPIRY|NORMAL_MESSAGE/i } },
+          { room: { $regex: /^atk_/i } },
+        ],
+      });
+    } catch {}
     server.close();
     process.exit(1);
   }

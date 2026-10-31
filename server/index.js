@@ -36,6 +36,8 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e7, // 10MB buffer limit for media attachments and voice clips
 });
 
+app.set("io", io);
+
 app.use(cors({ origin: "*", credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
@@ -89,6 +91,38 @@ const JWT_SECRET =
 process.env.JWT_SECRET = JWT_SECRET;
 
 const User = require("./models/User");
+const Room = require("./models/Room");
+
+const ensureDefaultRoom = async () => {
+  try {
+    const globalRooms = await Room.find({ name: { $regex: /^global$/i } });
+    if (globalRooms.length > 1) {
+      const [primary, ...duplicates] = globalRooms;
+      for (const dup of duplicates) {
+        await Room.deleteOne({ _id: dup._id });
+      }
+      primary.name = "global";
+      primary.description = "General community chat";
+      await primary.save();
+      console.log("🌐 Deduplicated #global rooms in DB");
+    } else if (globalRooms.length === 1) {
+      if (globalRooms[0].description !== "General community chat" || globalRooms[0].name !== "global") {
+        globalRooms[0].name = "global";
+        globalRooms[0].description = "General community chat";
+        await globalRooms[0].save();
+      }
+    } else {
+      await Room.create({
+        name: "global",
+        description: "General community chat",
+        isPrivate: false,
+      });
+      console.log("🌐 Initialized default #global room in DB");
+    }
+  } catch (err) {
+    console.error("Room init error:", err.message);
+  }
+};
 
 const ensureAdminAccounts = async () => {
   try {
@@ -123,7 +157,8 @@ const connectDB = async () => {
       socketTimeoutMS: 45000,
     });
     console.log("✅ MongoDB Atlas connected successfully!");
-    ensureAdminAccounts();
+    await ensureAdminAccounts();
+    await ensureDefaultRoom();
   } catch (err) {
     console.error("❌ MongoDB Atlas connection error:", err.message);
     console.log("⏳ Retrying connection to MongoDB in 3 seconds...");

@@ -35,22 +35,70 @@ export default function ConversationList({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState("all"); // "all", "channels", "dms", "unread"
 
-  // Filter conversations
+  // Filter conversations with strict deduplication
   const filteredRooms = useMemo(() => {
     if (activeFilter === "dms") return [];
-    return rooms.filter((r) =>
-      r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const seen = new Set();
+    const result = [];
+    const query = searchQuery.trim().toLowerCase();
+
+    for (const r of rooms || []) {
+      if (!r || !r.name || typeof r.name !== "string") continue;
+      const key = r.name.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const matches =
+        !query ||
+        key.includes(query) ||
+        (r.description && r.description.toLowerCase().includes(query));
+
+      if (matches) {
+        result.push(r);
+      }
+    }
+    return result;
   }, [rooms, searchQuery, activeFilter]);
 
   const filteredUsers = useMemo(() => {
     if (activeFilter === "channels") return [];
-    return onlineUsers.filter((u) =>
-      u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (u.customStatus && u.customStatus.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const seen = new Set();
+    const result = [];
+    const query = searchQuery.trim().toLowerCase();
+
+    for (const u of onlineUsers || []) {
+      if (!u || !u.username) continue;
+      const key = (u.userId || u.id || u.username).toString();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const matches =
+        !query ||
+        u.username.toLowerCase().includes(query) ||
+        (u.customStatus && u.customStatus.toLowerCase().includes(query));
+
+      if (matches) {
+        result.push(u);
+      }
+    }
+    return result;
   }, [onlineUsers, searchQuery, activeFilter]);
+
+  const totalUniqueRooms = useMemo(() => {
+    const seen = new Set();
+    for (const r of rooms || []) {
+      if (r && r.name) seen.add(r.name.trim().toLowerCase());
+    }
+    return seen.size;
+  }, [rooms]);
+
+  const totalUniqueUsers = useMemo(() => {
+    const seen = new Set();
+    for (const u of onlineUsers || []) {
+      if (u && u.username) seen.add((u.userId || u.id || u.username).toString());
+    }
+    return seen.size;
+  }, [onlineUsers]);
 
   return (
     <div className="flex flex-col h-full bg-slate-900/40 backdrop-blur-xl border-r border-white/10 select-none overflow-hidden">
@@ -61,7 +109,7 @@ export default function ConversationList({
             Conversations
           </h2>
           <p className="text-[11px] text-[var(--text-muted)]">
-            {onlineUsers.length} online • {rooms.length} channels
+            {totalUniqueUsers} online • {totalUniqueRooms} channels
           </p>
         </div>
 

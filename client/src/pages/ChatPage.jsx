@@ -13,15 +13,16 @@ import AdminModal from "../components/AdminModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
 import CallScreenModal from "../components/CallScreenModal";
 import api from "../utils/api";
+import { deduplicateRooms, DEFAULT_GLOBAL_ROOM } from "../utils/roomUtils";
 
 export default function ChatPage() {
   const { user, logout } = useAuth();
   const { socket, onlineUsers = [] } = useSocket() || {};
   const navigate = useNavigate();
 
-  const [activeRoom, setActiveRoom] = useState({ name: "global", description: "General community chat" });
+  const [activeRoom, setActiveRoom] = useState(DEFAULT_GLOBAL_ROOM);
   const [activeDM, setActiveDM] = useState(null);
-  const [rooms, setRooms] = useState([{ name: "global", description: "General community chat" }]);
+  const [rooms, setRooms] = useState([DEFAULT_GLOBAL_ROOM]);
   const [isLoadingRooms, setIsLoadingRooms] = useState(true);
 
   // Unread counts & last messages map
@@ -73,15 +74,19 @@ export default function ChatPage() {
     api
       .get("/rooms")
       .then((res) => {
-        setRooms([{ name: "global", description: "General community chat" }, ...(res.data || [])]);
+        setRooms(deduplicateRooms(res.data));
       })
       .catch(() => {})
       .finally(() => setIsLoadingRooms(false));
   }, []);
 
-  // Listen to new messages to track last message and unread count
+  // Listen to new messages and newly created rooms
   useEffect(() => {
     if (!socket) return;
+
+    const handleNewRoom = (room) => {
+      setRooms((prev) => deduplicateRooms([...prev, room]));
+    };
 
     const handleNewMsg = (msg) => {
       const roomKey = msg.room;
@@ -107,10 +112,12 @@ export default function ChatPage() {
 
     socket.on("new_message", handleNewMsg);
     socket.on("new_dm", handleNewDM);
+    socket.on("new_room", handleNewRoom);
 
     return () => {
       socket.off("new_message", handleNewMsg);
       socket.off("new_dm", handleNewDM);
+      socket.off("new_room", handleNewRoom);
     };
   }, [socket, activeRoom, activeDM, user]);
 
@@ -175,7 +182,7 @@ export default function ChatPage() {
   };
 
   const handleRoomCreated = (room) => {
-    setRooms((prev) => [...prev, room]);
+    setRooms((prev) => deduplicateRooms([...prev, room]));
     handleSelectRoom(room);
   };
 
@@ -191,7 +198,7 @@ export default function ChatPage() {
   };
 
   const handleRoomBlocked = () => {
-    handleSelectRoom({ name: "global", description: "General community chat" });
+    handleSelectRoom(DEFAULT_GLOBAL_ROOM);
   };
 
   const totalUnreads = Object.values(unreadCounts).reduce((acc, count) => acc + (count || 0), 0);

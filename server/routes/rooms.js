@@ -5,15 +5,22 @@ const Message = require("../models/Message");
 const authMiddleware = require("../middleware/auth");
 const { getUserRestrictions } = require("../utils/restrictions");
 
-// GET /api/rooms - Only return rooms the user has permission to view
+// GET /api/rooms - Only return rooms the user has permission to view, strictly deduplicated
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const allRooms = await Room.find({ isPrivate: false }).select("-password");
-    // Filter rooms through central restriction check
+    // Filter rooms through central restriction check and deduplicate by lowercased name
     const accessible = [];
+    const seenNames = new Set();
+
     for (const r of allRooms) {
+      if (!r || !r.name) continue;
+      const cleanKey = r.name.trim().toLowerCase();
+      if (seenNames.has(cleanKey)) continue;
+
       const rest = await getUserRestrictions(req.user.id, r.name);
       if (rest.canAccessRoom) {
+        seenNames.add(cleanKey);
         accessible.push(r);
       }
     }
@@ -47,6 +54,13 @@ router.post("/", authMiddleware, async (req, res) => {
       createdBy: req.user.id,
     });
     await room.save();
+
+    // Broadcast new public room to connected clients
+    const io = req.app.get("io");
+    if (io && !room.isPrivate) {
+      io.emit("new_room", { ...room.toObject(), password: undefined });
+    }
+
     res.status(201).json({ ...room.toObject(), password: undefined });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
