@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useSocket } from "../context/SocketContext";
@@ -12,6 +12,7 @@ import RoomModal from "../components/RoomModal";
 import AdminModal from "../components/AdminModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
 import CallScreenModal from "../components/CallScreenModal";
+import NotificationToastContainer, { playNotificationChime } from "../components/NotificationToast";
 import api from "../utils/api";
 import { deduplicateRooms, DEFAULT_GLOBAL_ROOM } from "../utils/roomUtils";
 
@@ -28,6 +29,7 @@ export default function ChatPage() {
   // Unread counts & last messages map
   const [unreadCounts, setUnreadCounts] = useState({});
   const [lastMessages, setLastMessages] = useState({});
+  const [notifications, setNotifications] = useState([]);
 
   // Modals state
   const [contextMenu, setContextMenu] = useState(null);
@@ -96,17 +98,39 @@ export default function ChatPage() {
         !activeDM && activeRoom && activeRoom.name === roomKey;
       if (!isCurrent) {
         setUnreadCounts((prev) => ({ ...prev, [roomKey]: (prev[roomKey] || 0) + 1 }));
+
+        // Trigger Pro Popup Notification if message was sent by another user
+        if (msg.senderName !== user?.username) {
+          addNotification({
+            type: "channel",
+            room: msg.room,
+            senderName: msg.senderName,
+            content: msg.content,
+            attachment: msg.attachment,
+            targetRoom: { name: msg.room },
+          });
+        }
       }
     };
 
     const handleNewDM = (msg) => {
       const otherUserId = msg.sender === user?.id ? msg.dmTo : msg.sender;
+      const otherUsername = msg.fromUsername || msg.senderName;
       const dmKey = `dm_${otherUserId}`;
       setLastMessages((prev) => ({ ...prev, [dmKey]: msg }));
 
-      const isCurrent = activeDM && (activeDM.userId === otherUserId || activeDM.id === otherUserId);
+      const isCurrent = activeDM && (activeDM.userId === otherUserId || activeDM.id === otherUserId || activeDM._id === otherUserId);
       if (!isCurrent && msg.sender !== user?.id) {
         setUnreadCounts((prev) => ({ ...prev, [dmKey]: (prev[dmKey] || 0) + 1 }));
+
+        // Trigger Pro Popup Notification for DM
+        addNotification({
+          type: "dm",
+          senderName: otherUsername,
+          content: msg.content,
+          attachment: msg.attachment,
+          targetUser: { userId: otherUserId, id: otherUserId, username: otherUsername },
+        });
       }
     };
 
@@ -161,45 +185,83 @@ export default function ChatPage() {
     };
   }, [isResizing]);
 
-  const handleLogout = () => {
+  // Notifications toast actions
+  const addNotification = useCallback((notif) => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 6);
+    playNotificationChime();
+    setNotifications((prev) => [
+      { ...notif, id, createdAt: Date.now() },
+      ...prev.slice(0, 3), // Keep max 4 active popups
+    ]);
+  }, []);
+
+  const dismissNotification = useCallback((id) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const handleLogout = useCallback(() => {
     logout();
     navigate("/auth");
-  };
+  }, [logout, navigate]);
 
-  const handleSelectRoom = (room) => {
-    setActiveRoom(room);
-    setActiveDM(null);
-    setUnreadCounts((prev) => ({ ...prev, [room.name]: 0 }));
-    if (isMobile) setMobileScreen("chat");
-  };
+  const handleSelectRoom = useCallback(
+    (room) => {
+      setActiveRoom(room);
+      setActiveDM(null);
+      setUnreadCounts((prev) => ({ ...prev, [room.name]: 0 }));
+      if (isMobile) setMobileScreen("chat");
+    },
+    [isMobile]
+  );
 
-  const handleSelectDM = (targetUser) => {
-    setActiveDM(targetUser);
-    setActiveRoom(null);
-    const dmKey = `dm_${targetUser.userId || targetUser.id}`;
-    setUnreadCounts((prev) => ({ ...prev, [dmKey]: 0 }));
-    if (isMobile) setMobileScreen("chat");
-  };
+  const handleSelectDM = useCallback(
+    (targetUser) => {
+      setActiveDM(targetUser);
+      setActiveRoom(null);
+      const dmKey = `dm_${targetUser.userId || targetUser.id || targetUser._id}`;
+      setUnreadCounts((prev) => ({ ...prev, [dmKey]: 0 }));
+      if (isMobile) setMobileScreen("chat");
+    },
+    [isMobile]
+  );
 
-  const handleRoomCreated = (room) => {
-    setRooms((prev) => deduplicateRooms([...prev, room]));
-    handleSelectRoom(room);
-  };
+  const openNotification = useCallback(
+    (notif) => {
+      dismissNotification(notif.id);
+      if (notif.type === "channel" && notif.targetRoom) {
+        handleSelectRoom(notif.targetRoom);
+      } else if (notif.type === "dm" && notif.targetUser) {
+        handleSelectDM(notif.targetUser);
+      }
+    },
+    [dismissNotification, handleSelectRoom, handleSelectDM]
+  );
 
-  const handleUserContextMenu = (e, targetUser, roomName) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      user: targetUser,
-      room: roomName || activeRoom?.name || "global",
-    });
-  };
+  const handleRoomCreated = useCallback(
+    (room) => {
+      setRooms((prev) => deduplicateRooms([...prev, room]));
+      handleSelectRoom(room);
+    },
+    [handleSelectRoom]
+  );
 
-  const handleRoomBlocked = () => {
+  const handleUserContextMenu = useCallback(
+    (e, targetUser, roomName) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        user: targetUser,
+        room: roomName || activeRoom?.name || "global",
+      });
+    },
+    [activeRoom]
+  );
+
+  const handleRoomBlocked = useCallback(() => {
     handleSelectRoom(DEFAULT_GLOBAL_ROOM);
-  };
+  }, [handleSelectRoom]);
 
   const totalUnreads = Object.values(unreadCounts).reduce((acc, count) => acc + (count || 0), 0);
 
@@ -263,6 +325,7 @@ export default function ChatPage() {
               lastMessages={lastMessages}
               isLoading={isLoadingRooms}
               filterView={railView}
+              onFilterChange={setRailView}
             />
 
             {/* Mobile Bottom Navigation Bar (Visible only on mobile in list view) */}
@@ -397,6 +460,13 @@ export default function ChatPage() {
           />
         )}
       </AnimatePresence>
+
+      {/* Pro Popup Notifications on the Top-Right */}
+      <NotificationToastContainer
+        notifications={notifications}
+        onDismiss={dismissNotification}
+        onOpen={openNotification}
+      />
     </div>
   );
 }

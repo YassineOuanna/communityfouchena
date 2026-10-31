@@ -182,7 +182,14 @@ module.exports = (io) => {
         }
 
         const msg = await Message.create(msgPayload);
-        io.to(cleanRoom).emit("new_message", msg);
+
+        // Broadcast to public channels so other users receive unread counts and desktop toasts
+        const targetRoomDoc = await Room.findOne({ name: cleanRoom });
+        if (!targetRoomDoc || !targetRoomDoc.isPrivate) {
+          io.emit("new_message", msg);
+        } else {
+          io.to(cleanRoom).emit("new_message", msg);
+        }
       } catch (err) {
         socket.emit("error", { message: "Failed to send message: " + err.message });
       }

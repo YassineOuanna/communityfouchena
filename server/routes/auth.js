@@ -1,11 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
+const rateLimit = require("express-rate-limit");
 const User = require("../models/User");
 const BannedIdentifier = require("../models/BannedIdentifier");
 const AuditLog = require("../models/AuditLog");
 const authMiddleware = require("../middleware/auth");
 const { getUserRestrictions } = require("../utils/restrictions");
+
+// Rate limit specifically for login & register to prevent brute-force without affecting session routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { message: "Too many authentication attempts. Please try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const signToken = (user) =>
   jwt.sign(
@@ -21,7 +31,7 @@ const signToken = (user) =>
   );
 
 // POST /api/auth/register (With Ban Evasion Protection)
-router.post("/register", async (req, res) => {
+router.post("/register", authLimiter, async (req, res) => {
   try {
     const { username, password, email } = req.body;
     if (!username || !password) {
@@ -93,7 +103,7 @@ router.post("/register", async (req, res) => {
 });
 
 // POST /api/auth/login (Enforces Global Ban at Handshake)
-router.post("/login", async (req, res) => {
+router.post("/login", authLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {

@@ -43,12 +43,15 @@ export default function ChatWindow({
   const [muteCountdown, setMuteCountdown] = useState(0);
 
   const bottomRef = useRef(null);
+  const onRoomBlockedRef = useRef(onRoomBlocked);
+  onRoomBlockedRef.current = onRoomBlocked;
 
   const currentUserId = user?.id || user?._id || "";
   const currentUsername = user?.username || "";
+  const targetDMId = activeDM ? (activeDM.userId || activeDM.id || activeDM._id || "") : "";
 
   const currentRoom = activeDM
-    ? `dm_${[currentUserId, activeDM.userId || activeDM.id || ""].sort().join("_")}`
+    ? `dm_${[currentUserId, targetDMId].sort().join("_")}`
     : activeRoom?.name || "global";
 
   // Check if active tab is visible and focused
@@ -59,55 +62,70 @@ export default function ChatWindow({
     return true;
   }, []);
 
-  // Fetch Message History & Active Restrictions (Requirement F: Restored on refresh)
+  const targetKey = activeDM ? `dm_${targetDMId}` : (activeRoom?.name || "global");
+
+  // Fetch Message History & Active Restrictions (Restored reliably without random wipes)
   useEffect(() => {
+    let isCancelled = false;
     setMessages([]);
     setTypers([]);
     setReplyingTo(null);
     setEditingMessage(null);
     setIsLoadingMessages(true);
 
-    const fetchHistoryAndRestrictions = async () => {
+    const loadData = async () => {
+      // 1. Fetch message history first so messages display immediately
       try {
-        // Fetch active restrictions first
+        let res;
+        if (activeDM) {
+          res = await api.get(`/rooms/dm/${targetDMId}`);
+        } else {
+          res = await api.get(`/rooms/${currentRoom}/messages`);
+        }
+        if (!isCancelled) {
+          setMessages(res.data || []);
+          setIsLoadingMessages(false);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          console.error("Failed to load messages:", err);
+          setIsLoadingMessages(false);
+          if (err.response?.status === 403) {
+            const errMsg = err.response.data?.message || "You are not permitted to access this room.";
+            alert(errMsg);
+            onRoomBlockedRef.current && onRoomBlockedRef.current(currentRoom);
+          }
+        }
+      }
+
+      // 2. Fetch active restrictions in background (non-blocking)
+      try {
         const restRes = await api.get(`/auth/restrictions?room=${currentRoom}`);
-        if (restRes.data) {
+        if (!isCancelled && restRes.data) {
           setRestrictions(restRes.data);
           const secs = restRes.data.effectiveMuteRemainingSeconds;
           setMuteCountdown(secs > 0 ? secs : 0);
 
           if (!restRes.data.canAccessRoom) {
             alert(restRes.data.accessBlockReason || "Access restricted");
-            onRoomBlocked && onRoomBlocked(currentRoom);
-            return;
+            onRoomBlockedRef.current && onRoomBlockedRef.current(currentRoom);
           }
         }
-
-        // Fetch messages
-        let res;
-        if (activeDM) {
-          res = await api.get(`/rooms/dm/${activeDM.userId}`);
-        } else {
-          res = await api.get(`/rooms/${currentRoom}/messages`);
-        }
-        setMessages(res.data || []);
-
-        if (socket && isTabActiveAndVisible()) {
-          socket.emit("mark_seen", { room: currentRoom });
-        }
       } catch (err) {
-        if (err.response?.status === 403) {
-          const errMsg = err.response.data?.message || "You are not permitted to access this room.";
-          alert(errMsg);
-          onRoomBlocked && onRoomBlocked(currentRoom);
-        }
-      } finally {
-        setIsLoadingMessages(false);
+        // Socket listener will also supply restriction state
+      }
+
+      if (socket && isTabActiveAndVisible()) {
+        socket.emit("mark_seen", { room: currentRoom });
       }
     };
 
-    fetchHistoryAndRestrictions();
-  }, [currentRoom, socket, activeDM, isTabActiveAndVisible, onRoomBlocked]);
+    loadData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [targetKey]);
 
   // Live Mute Countdown Timer
   useEffect(() => {
@@ -207,6 +225,7 @@ export default function ChatWindow({
     };
 
     const onNewMsg = (msg) => {
+      if (msg.room !== currentRoom) return; // Only append messages meant for the active room
       setMessages((prev) => {
         if (prev.find((m) => m._id === msg._id)) return prev;
         return [...prev, msg];

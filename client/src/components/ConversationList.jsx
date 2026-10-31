@@ -31,9 +31,10 @@ export default function ConversationList({
   lastMessages = {},
   isLoading = false,
   filterView = "all", // "all", "channels", "dms"
+  onFilterChange,
 }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all"); // "all", "channels", "dms", "unread"
+  const activeFilter = filterView || "all";
 
   // Filter conversations with strict deduplication
   const filteredRooms = useMemo(() => {
@@ -160,7 +161,7 @@ export default function ConversationList({
           <button
             key={f.id}
             type="button"
-            onClick={() => setActiveFilter(f.id)}
+            onClick={() => onFilterChange && onFilterChange(f.id)}
             className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
               activeFilter === f.id
                 ? "bg-indigo-600 text-white shadow-sm"
