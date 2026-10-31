@@ -34,28 +34,40 @@ export default function ChatPage() {
   useEffect(() => {
     if (!isResizing) return;
 
-    const handleMouseMove = (e) => {
+    const getClientX = (e) => {
+      if (e.touches && e.touches.length > 0) return e.touches[0].clientX;
+      return e.clientX;
+    };
+
+    const handlePointerMove = (e) => {
       if (!containerRef.current) return;
+      const clientX = getClientX(e);
+      if (clientX == null) return;
       const containerRect = containerRef.current.getBoundingClientRect();
-      const rawWidth = e.clientX - containerRect.left;
+      const rawWidth = clientX - containerRect.left;
       // Clamp between min 240px and max (either 650px or containerWidth - 360px for chat window)
       const maxAllowed = Math.max(300, Math.min(650, containerRect.width - 360));
       const clamped = Math.max(240, Math.min(rawWidth, maxAllowed));
+      widthRef.current = clamped;
       setSidebarWidth(clamped);
     };
 
-    const handleMouseUp = () => {
+    const handlePointerUp = () => {
       setIsResizing(false);
       try {
         localStorage.setItem("cf_sidebar_width", widthRef.current.toString());
       } catch {}
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("mousemove", handlePointerMove);
+    window.addEventListener("mouseup", handlePointerUp);
+    window.addEventListener("touchmove", handlePointerMove);
+    window.addEventListener("touchend", handlePointerUp);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mousemove", handlePointerMove);
+      window.removeEventListener("mouseup", handlePointerUp);
+      window.removeEventListener("touchmove", handlePointerMove);
+      window.removeEventListener("touchend", handlePointerUp);
     };
   }, [isResizing]);
   
@@ -165,11 +177,14 @@ export default function ChatPage() {
             />
           </div>
 
-          {/* Resizable Divider Handle (Desktop only) */}
+          {/* Resizable Divider Handle (Desktop & Tablet) */}
           {!isMobile && (
             <div
               onMouseDown={(e) => {
                 e.preventDefault();
+                setIsResizing(true);
+              }}
+              onTouchStart={() => {
                 setIsResizing(true);
               }}
               onDoubleClick={() => {
@@ -178,8 +193,8 @@ export default function ChatPage() {
                   localStorage.setItem("cf_sidebar_width", "320");
                 } catch {}
               }}
-              title="Drag to resize sidebar • Double-click to reset"
-              className={`w-2 -ml-1 -mr-1 relative z-20 cursor-col-resize flex-shrink-0 flex items-center justify-center select-none group transition-colors ${
+              title="Drag with mouse to resize sidebar • Double-click to reset"
+              className={`w-2.5 -ml-1.5 -mr-1 relative z-20 cursor-col-resize flex-shrink-0 flex items-center justify-center select-none group transition-colors ${
                 isResizing ? "bg-indigo-500/20" : "hover:bg-indigo-500/20"
               }`}
             >
