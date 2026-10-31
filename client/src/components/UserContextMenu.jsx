@@ -184,10 +184,17 @@ export default function UserContextMenu({
             {targetUser.username?.[0]?.toUpperCase() || "?"}
           </div>
           <div className="min-w-0">
-            <span className="font-bold text-white block truncate text-[11px]">
-              @{targetUser.username}
-            </span>
-            <span className="text-[9px] text-slate-400 block leading-none">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-white block truncate text-[11px]">
+                @{targetUser.username}
+              </span>
+              {isSelf && (
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 px-1 rounded font-semibold">
+                  You
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] text-slate-400 block leading-none mt-0.5">
               {targetUser.isAdmin ? "👑 Administrator" : "Community Member"}
             </span>
           </div>
@@ -207,8 +214,8 @@ export default function UserContextMenu({
           </button>
         )}
 
-        {/* Moderation Controls (Admin or Room Creator) */}
-        {!isSelf && canModerate && !isMasterAdmin && (
+        {/* Moderation Controls */}
+        {canModerate && (
           <>
             <div className="my-1 border-t border-white/10" />
 
@@ -388,13 +395,6 @@ export default function UserContextMenu({
           </>
         )}
 
-        {/* Self View (When right-clicking yourself) */}
-        {isSelf && (
-          <div className="px-3 py-2 text-slate-300 text-xs">
-            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-0.5">Your Profile</p>
-            <p className="text-[11px] text-emerald-400 font-medium">● Online now</p>
-          </div>
-        )}
       </motion.div>
 
       {/* Password Reset Dialog */}
