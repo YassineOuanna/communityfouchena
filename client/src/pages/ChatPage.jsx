@@ -12,6 +12,7 @@ import RoomModal from "../components/RoomModal";
 import AdminModal from "../components/AdminModal";
 import ChangePasswordModal from "../components/ChangePasswordModal";
 import CallScreenModal from "../components/CallScreenModal";
+import IncomingCallModal from "../components/IncomingCallModal";
 import NotificationToastContainer, { playNotificationChime } from "../components/NotificationToast";
 import api from "../utils/api";
 import { deduplicateRooms, DEFAULT_GLOBAL_ROOM } from "../utils/roomUtils";
@@ -39,6 +40,7 @@ export default function ChatPage() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [activeCall, setActiveCall] = useState(null);
+  const [incomingCall, setIncomingCall] = useState(null);
 
   // Navigation rail view ("all", "channels", "dms")
   const [railView, setRailView] = useState("all");
@@ -135,14 +137,40 @@ export default function ChatPage() {
       }
     };
 
+    const handleIncomingCall = (callData) => {
+      // If user is already on a call, mark busy
+      if (activeCall) {
+        socket.emit("call_response", {
+          toUserId: callData.fromUserId,
+          action: "busy",
+          reason: "User is currently busy on another call",
+        });
+        return;
+      }
+      setIncomingCall(callData);
+    };
+
+    const handleCallEndedGlobal = ({ fromUserId }) => {
+      setIncomingCall((prev) => {
+        if (prev && prev.fromUserId === fromUserId) {
+          return null;
+        }
+        return prev;
+      });
+    };
+
     socket.on("new_message", handleNewMsg);
     socket.on("new_dm", handleNewDM);
     socket.on("new_room", handleNewRoom);
+    socket.on("incoming_call", handleIncomingCall);
+    socket.on("call_ended", handleCallEndedGlobal);
 
     return () => {
       socket.off("new_message", handleNewMsg);
       socket.off("new_dm", handleNewDM);
       socket.off("new_room", handleNewRoom);
+      socket.off("incoming_call", handleIncomingCall);
+      socket.off("call_ended", handleCallEndedGlobal);
     };
   }, [socket, activeRoom, activeDM, user]);
 
@@ -264,6 +292,23 @@ export default function ChatPage() {
     handleSelectRoom(DEFAULT_GLOBAL_ROOM);
   }, [handleSelectRoom]);
 
+  const handleStartCall = useCallback(
+    (target, type = "voice") => {
+      const callTarget =
+        target ||
+        activeDM || {
+          username: activeRoom?.name || "Global Chat",
+          room: activeRoom?.name,
+        };
+      setActiveCall({
+        target: callTarget,
+        type,
+        isCaller: true,
+      });
+    },
+    [activeDM, activeRoom]
+  );
+
   const totalUnreads = Object.values(unreadCounts).reduce((acc, count) => acc + (count || 0), 0);
 
   return (
@@ -296,12 +341,7 @@ export default function ChatPage() {
               unreadTotal={totalUnreads}
               onOpenProfile={() => setShowProfileModal(true)}
               onOpenSettings={() => setShowProfileModal(true)}
-              onStartCall={() =>
-                setActiveCall({
-                  type: "voice",
-                  target: activeDM || { username: activeRoom?.name || "Global Chat" },
-                })
-              }
+              onStartCall={() => handleStartCall(null, "voice")}
               onLogout={handleLogout}
             />
           )}
@@ -354,12 +394,7 @@ export default function ChatPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
-                    setActiveCall({
-                      type: "voice",
-                      target: activeDM || { username: activeRoom?.name || "Global Chat" },
-                    })
-                  }
+                  onClick={() => handleStartCall(null, "voice")}
                   className="flex flex-col items-center gap-1 text-[11px] text-slate-400 hover:text-white"
                 >
                   <PhoneCallIcon className="w-5 h-5" />
@@ -413,6 +448,7 @@ export default function ChatPage() {
               onUserContextMenu={handleUserContextMenu}
               onRoomBlocked={handleRoomBlocked}
               onSelectDM={handleSelectDM}
+              onStartCall={handleStartCall}
             />
           </div>
         </div>
@@ -453,10 +489,39 @@ export default function ChatPage() {
           <ChangePasswordModal onClose={() => setShowPasswordModal(false)} />
         )}
 
+        {incomingCall && (
+          <IncomingCallModal
+            call={incomingCall}
+            onAccept={() => {
+              setActiveCall({
+                target: {
+                  userId: incomingCall.fromUserId,
+                  username: incomingCall.fromUsername,
+                  room: incomingCall.room,
+                },
+                type: incomingCall.type || "voice",
+                isCaller: false,
+                incomingOffer: incomingCall.offer,
+              });
+              setIncomingCall(null);
+            }}
+            onDecline={() => {
+              socket?.emit("call_response", {
+                toUserId: incomingCall.fromUserId,
+                action: "declined",
+                room: incomingCall.room,
+              });
+              setIncomingCall(null);
+            }}
+          />
+        )}
+
         {activeCall && (
           <CallScreenModal
             target={activeCall.target}
             type={activeCall.type}
+            isCaller={activeCall.isCaller}
+            incomingOffer={activeCall.incomingOffer}
             onClose={() => setActiveCall(null)}
           />
         )}

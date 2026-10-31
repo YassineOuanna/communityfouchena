@@ -6,7 +6,6 @@ import MessageBubble from "./MessageBubble";
 import TypingIndicator from "./TypingIndicator";
 import MessageInput from "./MessageInput";
 import MemberListDrawer from "./MemberListDrawer";
-import CallScreenModal from "./CallScreenModal";
 import api from "../utils/api";
 import {
   HashIcon,
@@ -27,6 +26,7 @@ export default function ChatWindow({
   onUserContextMenu,
   onRoomBlocked,
   onSelectDM,
+  onStartCall,
 }) {
   const { socket } = useSocket();
   const { user, logout } = useAuth();
@@ -37,7 +37,6 @@ export default function ChatWindow({
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [showMemberList, setShowMemberList] = useState(false);
-  const [activeCall, setActiveCall] = useState(null);
   const [searchInChat, setSearchInChat] = useState("");
   const [showSearch, setShowSearch] = useState(false);
 
@@ -307,13 +306,6 @@ export default function ChatWindow({
       );
     };
 
-    const onIncomingCall = (callData) => {
-      setActiveCall({
-        type: callData.type || "voice",
-        target: { username: callData.fromUsername, userId: callData.fromUserId },
-      });
-    };
-
     // REQUIREMENT C: Kicked from room
     const onKicked = ({ room, message }) => {
       if (room === currentRoom || !room) {
@@ -345,7 +337,6 @@ export default function ChatWindow({
     socket.on("message_reacted", onMsgReacted);
     socket.on("messages_seen", onMessagesSeen);
     socket.on("user_typing", onTyping);
-    socket.on("incoming_call", onIncomingCall);
     socket.on("kicked_from_room", onKicked);
     socket.on("banned", onBanned);
     socket.on("moderation_notice", onNotice);
@@ -364,7 +355,6 @@ export default function ChatWindow({
       socket.off("message_reacted", onMsgReacted);
       socket.off("messages_seen", onMessagesSeen);
       socket.off("user_typing", onTyping);
-      socket.off("incoming_call", onIncomingCall);
       socket.off("kicked_from_room", onKicked);
       socket.off("banned", onBanned);
       socket.off("moderation_notice", onNotice);
@@ -539,10 +529,13 @@ export default function ChatWindow({
                   setNotice("Cannot start calls while muted.");
                   return;
                 }
-                setActiveCall({
-                  type: "voice",
-                  target: activeDM || { username: activeRoom?.name || "Global Room" },
-                });
+                const callTarget = activeDM || {
+                  username: activeRoom?.name || "Global Room",
+                  room: activeRoom?.name,
+                };
+                if (onStartCall) {
+                  onStartCall(callTarget, "voice");
+                }
               }}
               className="p-2 rounded-xl text-[var(--text-muted)] hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
               title="Start Voice Call"
@@ -558,10 +551,13 @@ export default function ChatWindow({
                   setNotice("Cannot start video calls while muted.");
                   return;
                 }
-                setActiveCall({
-                  type: "video",
-                  target: activeDM || { username: activeRoom?.name || "Global Room" },
-                });
+                const callTarget = activeDM || {
+                  username: activeRoom?.name || "Global Room",
+                  room: activeRoom?.name,
+                };
+                if (onStartCall) {
+                  onStartCall(callTarget, "video");
+                }
               }}
               className="p-2 rounded-xl text-[var(--text-muted)] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
               title="Start Video Call"
@@ -748,17 +744,6 @@ export default function ChatWindow({
             activeRoom={activeRoom}
             onSelectDM={onSelectDM}
             onUserContextMenu={onUserContextMenu}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* Voice and Video Call Screen Overlay */}
-      <AnimatePresence>
-        {activeCall && (
-          <CallScreenModal
-            target={activeCall.target}
-            type={activeCall.type}
-            onClose={() => setActiveCall(null)}
           />
         )}
       </AnimatePresence>

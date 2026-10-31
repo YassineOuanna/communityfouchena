@@ -380,26 +380,42 @@ module.exports = (io) => {
     });
 
     // ==========================================
-    // 8. CALLS: Block if Muted or Banned
+    // 8. REAL-TIME CALLS & WEBRTC SIGNALING
     // ==========================================
-    socket.on("call_user", async ({ toUserId, toUsername, room, type }) => {
+    socket.on("call_user", async ({ toUserId, toUsername, room, type, offer }) => {
       const restrictions = await getUserRestrictions(userId, room);
       if (restrictions.isMuted || !restrictions.canSend) {
         socket.emit("muted_error", { message: "Cannot start calls while restricted." });
         return;
       }
 
-      if (toUserId) {
-        const targetSockets = userSockets.get(toUserId);
-        if (targetSockets) {
+      let targetId = toUserId;
+      if (!targetId && toUsername) {
+        for (const [sId, u] of onlineUsers.entries()) {
+          if (u.username && u.username.toLowerCase() === toUsername.toLowerCase()) {
+            targetId = u.userId;
+            break;
+          }
+        }
+      }
+
+      if (targetId) {
+        const targetSockets = userSockets.get(targetId);
+        if (targetSockets && targetSockets.size > 0) {
           for (const sId of targetSockets) {
             io.to(sId).emit("incoming_call", {
               fromUserId: userId,
               fromUsername: username,
               type: type || "voice",
               room,
+              offer,
             });
           }
+        } else {
+          socket.emit("call_status", {
+            action: "offline",
+            message: `${toUsername || "User"} is currently offline.`,
+          });
         }
       } else if (room) {
         socket.to(room).emit("incoming_call", {
@@ -407,21 +423,98 @@ module.exports = (io) => {
           fromUsername: username,
           type: type || "voice",
           room,
+          offer,
         });
       }
     });
 
-    socket.on("call_response", ({ toUserId, action, room }) => {
+    socket.on("call_answer", ({ toUserId, answer, room }) => {
       if (toUserId) {
         const targetSockets = userSockets.get(toUserId);
         if (targetSockets) {
           for (const sId of targetSockets) {
-            io.to(sId).emit("call_status", { fromUserId: userId, fromUsername: username, action, room });
+            io.to(sId).emit("call_answered", {
+              fromUserId: userId,
+              fromUsername: username,
+              answer,
+              room,
+            });
+          }
+        }
+      } else if (room) {
+        socket.to(room).emit("call_answered", {
+          fromUserId: userId,
+          fromUsername: username,
+          answer,
+          room,
+        });
+      }
+    });
+
+    socket.on("ice_candidate", ({ toUserId, candidate, room }) => {
+      if (toUserId) {
+        const targetSockets = userSockets.get(toUserId);
+        if (targetSockets) {
+          for (const sId of targetSockets) {
+            io.to(sId).emit("ice_candidate", {
+              fromUserId: userId,
+              candidate,
+            });
+          }
+        }
+      } else if (room) {
+        socket.to(room).emit("ice_candidate", {
+          fromUserId: userId,
+          candidate,
+        });
+      }
+    });
+
+    socket.on("call_response", ({ toUserId, action, reason, room }) => {
+      if (toUserId) {
+        const targetSockets = userSockets.get(toUserId);
+        if (targetSockets) {
+          for (const sId of targetSockets) {
+            io.to(sId).emit("call_status", {
+              fromUserId: userId,
+              fromUsername: username,
+              action,
+              reason,
+              room,
+            });
           }
         }
       }
       if (room) {
-        socket.to(room).emit("call_status", { fromUserId: userId, fromUsername: username, action, room });
+        socket.to(room).emit("call_status", {
+          fromUserId: userId,
+          fromUsername: username,
+          action,
+          reason,
+          room,
+        });
+      }
+    });
+
+    socket.on("end_call", ({ toUserId, room }) => {
+      if (toUserId) {
+        const targetSockets = userSockets.get(toUserId);
+        if (targetSockets) {
+          for (const sId of targetSockets) {
+            io.to(sId).emit("call_ended", {
+              fromUserId: userId,
+              fromUsername: username,
+              room,
+            });
+          }
+        }
+      }
+      if (room) {
+        socket.to(room).emit("call_ended", {
+          fromUserId: userId,
+          fromUsername: username,
+          room,
+        });
       }
     });
 
