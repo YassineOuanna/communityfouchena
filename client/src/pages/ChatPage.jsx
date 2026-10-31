@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -12,6 +12,52 @@ export default function ChatPage() {
   const [activeRoom, setActiveRoom] = useState({ name: "global", description: "General community chat" });
   const [activeDM, setActiveDM] = useState(null);
   const [contextMenu, setContextMenu] = useState(null);
+
+  // Resizable sidebar width (persisted in localStorage)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("cf_sidebar_width");
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (!isNaN(parsed) && parsed >= 240 && parsed <= 650) return parsed;
+      }
+      return window.innerWidth >= 1280 ? 360 : 320;
+    }
+    return 320;
+  });
+
+  const [isResizing, setIsResizing] = useState(false);
+  const containerRef = useRef(null);
+  const widthRef = useRef(sidebarWidth);
+  widthRef.current = sidebarWidth;
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      if (!containerRef.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const rawWidth = e.clientX - containerRect.left;
+      // Clamp between min 240px and max (either 650px or containerWidth - 360px for chat window)
+      const maxAllowed = Math.max(300, Math.min(650, containerRect.width - 360));
+      const clamped = Math.max(240, Math.min(rawWidth, maxAllowed));
+      setSidebarWidth(clamped);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      try {
+        localStorage.setItem("cf_sidebar_width", widthRef.current.toString());
+      } catch {}
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizing]);
   
   // Mobile check
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
@@ -98,10 +144,14 @@ export default function ChatPage() {
 
       {/* Main Glassmorphic Layout */}
       <div className="relative z-10 h-full w-full p-0 md:p-3 lg:p-4 flex">
-        <div className="w-full h-full flex rounded-none md:rounded-3xl overflow-hidden glass-surface border-0 md:border md:border-white/10 shadow-2xl">
-          {/* Sidebar Pane: on mobile controlled by mobileView; on desktop (md+) ALWAYS visible on the left! */}
+        <div
+          ref={containerRef}
+          className="w-full h-full flex rounded-none md:rounded-3xl overflow-hidden glass-surface border-0 md:border md:border-white/10 shadow-2xl relative"
+        >
+          {/* Sidebar Pane: on mobile controlled by mobileView; on desktop (md+) dynamically sized by sidebarWidth! */}
           <div
-            className={`w-full md:w-80 lg:w-96 flex-shrink-0 h-full border-r border-white/10 ${
+            style={!isMobile ? { width: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px`, maxWidth: `${sidebarWidth}px` } : undefined}
+            className={`w-full flex-shrink-0 h-full overflow-hidden ${
               isMobile ? (mobileView === "list" ? "block" : "hidden") : "block"
             }`}
           >
@@ -114,6 +164,43 @@ export default function ChatPage() {
               onUserContextMenu={handleUserContextMenu}
             />
           </div>
+
+          {/* Resizable Divider Handle (Desktop only) */}
+          {!isMobile && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsResizing(true);
+              }}
+              onDoubleClick={() => {
+                setSidebarWidth(320);
+                try {
+                  localStorage.setItem("cf_sidebar_width", "320");
+                } catch {}
+              }}
+              title="Drag to resize sidebar • Double-click to reset"
+              className={`w-2 -ml-1 -mr-1 relative z-20 cursor-col-resize flex-shrink-0 flex items-center justify-center select-none group transition-colors ${
+                isResizing ? "bg-indigo-500/20" : "hover:bg-indigo-500/20"
+              }`}
+            >
+              {/* Vertical Divider Line */}
+              <div
+                className={`w-[2px] h-full transition-colors ${
+                  isResizing
+                    ? "bg-indigo-400 shadow-[0_0_8px_rgba(129,140,248,0.8)]"
+                    : "bg-white/10 group-hover:bg-indigo-400/80"
+                }`}
+              />
+              {/* Drag Handle Grip Pill in center */}
+              <div
+                className={`absolute w-1 h-8 rounded-full transition-colors ${
+                  isResizing
+                    ? "bg-indigo-300 shadow-[0_0_6px_rgba(165,180,252,0.9)]"
+                    : "bg-white/20 group-hover:bg-indigo-300"
+                }`}
+              />
+            </div>
+          )}
 
           {/* Chat Pane: on mobile controlled by mobileView; on desktop (md+) ALWAYS visible on the right! */}
           <div
@@ -132,6 +219,11 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Global Transparent Drag Overlay to ensure uninterrupted mouse drag */}
+      {isResizing && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
+      )}
 
       {/* User Context Menu for Moderation, Mute, Ban, Kick, and Password Reset */}
       <AnimatePresence>
