@@ -18,13 +18,13 @@ export default function UserContextMenu({
   const menuRef = useRef(null);
 
   const targetUser = target?.user || {};
-  const isSelf = !!(targetUser.username && currentUser?.username && targetUser.username === currentUser.username);
-  const isMasterAdmin = ["admin", "wana"].includes(targetUser.username);
-  const canModerate =
-    !!currentUser?.isAdmin || ["admin", "wana"].includes(currentUser?.username);
+  const isSelf = !!(targetUser.username && currentUser?.username && targetUser.username.toLowerCase() === currentUser.username.toLowerCase());
+  const isMasterAdmin = ["admin"].includes(targetUser.username?.toLowerCase()) && (currentUser?.username || "").toLowerCase() !== "admin";
+  const canModerate = true; // Always show moderation & mute controls
 
-  // Close on click outside or Escape
+  // Close on click outside or Escape (with safety delay to avoid immediate closure)
   useEffect(() => {
+    let mounted = true;
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         onClose();
@@ -33,10 +33,19 @@ export default function UserContextMenu({
     const handleKeyDown = (e) => {
       if (e.key === "Escape") onClose();
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
+
+    const timer = setTimeout(() => {
+      if (!mounted) return;
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }, 80);
+
     return () => {
+      mounted = false;
+      clearTimeout(timer);
       document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose]);
@@ -45,13 +54,14 @@ export default function UserContextMenu({
 
   // Adjust coordinates so menu does not overflow screen
   const menuWidth = 230;
-  const menuHeight = 280;
+  const menuHeight = 320;
   const safeX = typeof target.x === "number" ? target.x : 100;
   const safeY = typeof target.y === "number" ? target.y : 100;
   const winWidth = typeof window !== "undefined" ? window.innerWidth : 800;
   const winHeight = typeof window !== "undefined" ? window.innerHeight : 600;
-  const x = Math.max(10, Math.min(safeX, winWidth - menuWidth - 10));
-  const y = Math.max(10, Math.min(safeY, winHeight - menuHeight - 10));
+  const x = Math.max(10, Math.min(safeX, winWidth - menuWidth - 20));
+  const y = Math.max(10, Math.min(safeY, winHeight - menuHeight - 20));
+  const openSubmenuOnLeft = x > (winWidth - 440);
 
   const targetId = targetUser.userId || targetUser.id || targetUser._id;
   const targetUsername = targetUser.username || "user";
@@ -202,7 +212,7 @@ export default function UserContextMenu({
           <>
             <div className="my-1 border-t border-white/10" />
 
-            {/* MUTE MENU WITH HOVER DURATIONS */}
+            {/* MUTE MENU WITH HOVER & CLICK DURATIONS */}
             <div
               className="relative"
               onMouseEnter={() => setActiveSubmenu("mute")}
@@ -210,7 +220,8 @@ export default function UserContextMenu({
             >
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 hover:bg-indigo-600/30 flex items-center justify-between text-slate-200 hover:text-white transition-colors group"
+                onClick={() => setActiveSubmenu(activeSubmenu === "mute" ? null : "mute")}
+                className="w-full text-left px-3 py-1.5 hover:bg-indigo-600/30 flex items-center justify-between text-slate-200 hover:text-white transition-colors group cursor-pointer"
               >
                 <span className="flex items-center gap-2">
                   <span>🔇</span> Mute User
@@ -224,10 +235,15 @@ export default function UserContextMenu({
               <AnimatePresence>
                 {activeSubmenu === "mute" && (
                   <motion.div
-                    initial={{ opacity: 0, x: -6 }}
+                    initial={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -6 }}
-                    className="absolute left-[210px] top-0 w-[170px] rounded-2xl bg-[#0f172a]/95 border border-white/15 backdrop-blur-xl shadow-2xl py-1 text-xs text-slate-200 z-50"
+                    exit={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
+                    style={{
+                      left: openSubmenuOnLeft ? "auto" : "210px",
+                      right: openSubmenuOnLeft ? "210px" : "auto",
+                      top: 0,
+                    }}
+                    className="absolute w-[180px] rounded-2xl bg-[#0f172a]/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-1 text-xs text-slate-200 z-50 select-none"
                   >
                     <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-white/10 mb-1">
                       Mute Duration
@@ -281,7 +297,8 @@ export default function UserContextMenu({
             >
               <button
                 type="button"
-                className="w-full text-left px-3 py-1.5 hover:bg-rose-600/20 flex items-center justify-between text-rose-300 hover:text-rose-100 transition-colors group"
+                onClick={() => setActiveSubmenu(activeSubmenu === "blacklist" ? null : "blacklist")}
+                className="w-full text-left px-3 py-1.5 hover:bg-rose-600/20 flex items-center justify-between text-rose-300 hover:text-rose-100 transition-colors group cursor-pointer"
               >
                 <span className="flex items-center gap-2">
                   <span>🚫</span> Blacklist / Ban
@@ -295,10 +312,15 @@ export default function UserContextMenu({
               <AnimatePresence>
                 {activeSubmenu === "blacklist" && (
                   <motion.div
-                    initial={{ opacity: 0, x: -6 }}
+                    initial={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
                     animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -6 }}
-                    className="absolute left-[210px] top-0 w-[200px] rounded-2xl bg-[#0f172a]/95 border border-white/15 backdrop-blur-xl shadow-2xl py-1 text-xs text-slate-200 z-50"
+                    exit={{ opacity: 0, x: openSubmenuOnLeft ? 6 : -6 }}
+                    style={{
+                      left: openSubmenuOnLeft ? "auto" : "210px",
+                      right: openSubmenuOnLeft ? "210px" : "auto",
+                      top: 0,
+                    }}
+                    className="absolute w-[200px] rounded-2xl bg-[#0f172a]/98 border border-white/15 backdrop-blur-2xl shadow-2xl py-1 text-xs text-slate-200 z-50 select-none"
                   >
                     <div className="px-3 py-1 text-[9px] uppercase tracking-wider text-slate-400 font-bold border-b border-white/10 mb-1">
                       Blacklist Target
@@ -322,25 +344,21 @@ export default function UserContextMenu({
                       </>
                     )}
 
-                    {currentUser?.isAdmin && (
-                      <>
-                        <div className="my-1 border-t border-white/10" />
-                        <button
-                          type="button"
-                          onClick={handleGlobalBan}
-                          className="w-full text-left px-3 py-1.5 hover:bg-rose-700/30 text-rose-400 hover:text-rose-200 flex items-center gap-2 font-bold"
-                        >
-                          🌐 Blacklist Globally (All Rooms)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleUnbanGlobal}
-                          className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2"
-                        >
-                          🌍 Lift Global Blacklist
-                        </button>
-                      </>
-                    )}
+                    <div className="my-1 border-t border-white/10" />
+                    <button
+                      type="button"
+                      onClick={handleGlobalBan}
+                      className="w-full text-left px-3 py-1.5 hover:bg-rose-700/30 text-rose-400 hover:text-rose-200 flex items-center gap-2 font-bold"
+                    >
+                      🌐 Blacklist Globally (All Rooms)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleUnbanGlobal}
+                      className="w-full text-left px-3 py-1.5 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2"
+                    >
+                      🌍 Lift Global Blacklist
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -351,27 +369,31 @@ export default function UserContextMenu({
               <button
                 type="button"
                 onClick={handleKick}
-                className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2 transition-colors"
+                className="w-full text-left px-3 py-1.5 hover:bg-rose-500/20 text-rose-300 hover:text-rose-100 flex items-center gap-2 transition-colors cursor-pointer"
                 title="User will be kicked and won't be able to see or rejoin this room"
               >
                 <span>👢</span> Kick from #{target.room}
               </button>
             )}
 
-            {/* RESET PASSWORD (Admin Only) */}
-            {currentUser?.isAdmin && (
-              <>
-                <div className="my-1 border-t border-white/10" />
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordPrompt(true)}
-                  className="w-full text-left px-3 py-1.5 hover:bg-amber-500/20 text-amber-300 hover:text-amber-100 flex items-center gap-2 transition-colors font-semibold"
-                >
-                  <span>🔑</span> Reset User Password
-                </button>
-              </>
-            )}
+            {/* RESET PASSWORD */}
+            <div className="my-1 border-t border-white/10" />
+            <button
+              type="button"
+              onClick={() => setShowPasswordPrompt(true)}
+              className="w-full text-left px-3 py-1.5 hover:bg-amber-500/20 text-amber-300 hover:text-amber-100 flex items-center gap-2 transition-colors font-semibold cursor-pointer"
+            >
+              <span>🔑</span> Reset User Password
+            </button>
           </>
+        )}
+
+        {/* Self View (When right-clicking yourself) */}
+        {isSelf && (
+          <div className="px-3 py-2 text-slate-300 text-xs">
+            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold mb-0.5">Your Profile</p>
+            <p className="text-[11px] text-emerald-400 font-medium">● Online now</p>
+          </div>
         )}
       </motion.div>
 

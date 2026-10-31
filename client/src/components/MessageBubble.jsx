@@ -35,14 +35,17 @@ export default function MessageBubble({ msg, isOwn, seenBy = [], onUserContextMe
       {/* Sender Name for incoming messages */}
       {!isOwn && (
         <span
-          onContextMenu={(e) =>
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             onUserContextMenu &&
-            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
-          }
-          onClick={(e) =>
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
             onUserContextMenu &&
-            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
-          }
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
           className="text-[11px] font-semibold text-slate-300 mb-1 ml-10 cursor-pointer hover:text-indigo-300 transition-colors"
           title="Click or right-click for options"
         >
@@ -52,41 +55,64 @@ export default function MessageBubble({ msg, isOwn, seenBy = [], onUserContextMe
 
       {/* Row: Sender Profile Pic & Message Bubble locked at the exact same horizontal level */}
       <div
-        className={`flex items-end gap-2 max-w-[85%] sm:max-w-[75%] ${
+        className={`relative group/bubble flex items-end gap-2 max-w-[85%] sm:max-w-[75%] ${
           isOwn ? "flex-row-reverse" : "flex-row"
         }`}
       >
         {/* Sender Profile Avatar */}
         <div
-          onContextMenu={(e) =>
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             onUserContextMenu &&
-            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
-          }
-          onClick={(e) =>
-            !isOwn &&
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
             onUserContextMenu &&
-            onUserContextMenu(e, { userId: msg.sender, username: msg.senderName })
-          }
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
           className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold select-none shadow-sm cursor-pointer hover:scale-105 transition-transform ${
             isOwn
               ? "bg-gradient-to-tr from-indigo-500 to-cyan-500 text-white border border-white/20"
               : "bg-white/[0.08] border border-white/10 text-slate-200"
           }`}
-          title={`${msg.senderName} (Options)`}
+          title={`${msg.senderName} (Click or right-click for options)`}
         >
           {msg.senderName?.[0]?.toUpperCase() || "?"}
         </div>
 
-        {/* Message Bubble */}
+        {/* Message Bubble with Right-Click Support */}
         <div
-          className={`px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed break-words shadow-sm backdrop-blur-md ${
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onUserContextMenu &&
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
+          className={`px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed break-words shadow-sm backdrop-blur-md cursor-pointer ${
             isOwn
               ? "bg-gradient-to-r from-indigo-600/90 to-indigo-500/90 border border-indigo-400/30 text-white rounded-br-xs shadow-bubble"
-              : "bg-white/[0.06] border border-white/10 text-slate-100 rounded-bl-xs"
+              : "bg-white/[0.06] border border-white/10 text-slate-100 rounded-bl-xs hover:border-white/20"
           }`}
+          title="Right-click for options, mute, kick & blacklist"
         >
           {msg.content}
         </div>
+
+        {/* 3-Dots Quick Action Button on Hover */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUserContextMenu &&
+              onUserContextMenu(e, { userId: msg.sender, username: msg.senderName });
+          }}
+          className="opacity-0 group-hover/bubble:opacity-100 transition-opacity w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-xs flex-shrink-0 mb-1 cursor-pointer"
+          title="User Options & Moderation"
+        >
+          ⋮
+        </button>
       </div>
 
       {/* Timestamp & Seen Receipt Status Bar: Clean horizontal row directly aligned below bubble */}

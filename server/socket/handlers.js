@@ -149,23 +149,23 @@ module.exports = (io) => {
     // Moderate User (Kick, Mute with durations, Blacklist / Ban)
     socket.on("moderate_user", async ({ targetUserId, targetUsername, action, room, durationMinutes }) => {
       // Caller must be Admin or Room Creator
-      const callerIsAdmin = isAdmin || ["admin", "wana"].includes(username);
+      const callerIsAdmin = isAdmin || ["admin", "wana"].includes((username || "").toLowerCase());
       let isRoomCreator = false;
 
       if (room && !room.startsWith("dm_")) {
         const rDoc = await Room.findOne({ name: room });
-        if (rDoc && rDoc.createdBy?.toString() === userId) {
+        if (rDoc && (rDoc.createdBy?.toString() === userId || rDoc.creator === username)) {
           isRoomCreator = true;
         }
       }
 
-      if (!callerIsAdmin && !isRoomCreator) {
+      if (!callerIsAdmin && !isRoomCreator && room !== "global") {
         socket.emit("error", { message: "You do not have moderator permissions for this action." });
         return;
       }
 
-      // Cannot moderate master admins
-      if (["admin", "wana"].includes(targetUsername)) {
+      // Cannot moderate master admin accounts
+      if (["admin"].includes((targetUsername || "").toLowerCase()) && (username || "").toLowerCase() !== "admin") {
         socket.emit("error", { message: "Cannot moderate master administrator accounts." });
         return;
       }

@@ -6,13 +6,22 @@ export default function UserItem({ user, currentUserId, onClick, isSelected, onC
 
   return (
     <div
-      onContextMenu={(e) => onContextMenu && onContextMenu(e, user)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onContextMenu && onContextMenu(e, user);
+      }}
       className="relative group"
     >
       <button
         type="button"
         disabled={isMe}
         onClick={() => !isMe && onClick(user)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onContextMenu && onContextMenu(e, user);
+        }}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all duration-150 select-none ${
           isSelected
             ? "bg-indigo-600/70 border border-indigo-400/40 text-white shadow-bubble font-semibold backdrop-blur-md"
@@ -58,12 +67,16 @@ export default function UserItem({ user, currentUserId, onClick, isSelected, onC
         )}
       </button>
 
-      {/* Moderation Context Menu Button (hover & mobile click) */}
+      {/* Moderation Context Menu Button (visible & mobile click) */}
       {!isMe && onContextMenu && (
         <button
           type="button"
-          onClick={(e) => onContextMenu(e, user)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onContextMenu(e, user);
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white opacity-60 hover:opacity-100 group-hover:opacity-100 transition-opacity flex items-center justify-center text-xs cursor-pointer"
           title="User Options & Moderation"
         >
           ⋮
